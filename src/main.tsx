@@ -9,10 +9,10 @@ Devvit.configure({ redditAPI: true });
 // Schedule a daily task to update the wiki
 Devvit.addSchedulerJob({
   name: 'daily-mod-stats-update', // @ts-ignore
-  schedule: '0 0 * * *', // Run at midnight every day
+  schedule: '0 * * * *',
   onRun: async (event, context) => {
     //const subreddit = await context.reddit.getSubredditByName(context.subreddit.name);
-    await updateModStats(context);
+    await updateModStats(context, false);
   },
 });
 function datetime_local_toUTCString(datetime_local: Datetime_global): string {
@@ -27,7 +27,7 @@ Devvit.addMenuItem({
   onPress: async (_event, context) => {
     context.ui.showToast('Updating mod stats...');
     try {
-      await updateModStats(context);
+      await updateModStats(context, true);
       context.ui.showToast('Mod stats updated successfully!');
     } catch (error) {
       console.error('Error updating mod stats:', error);
@@ -36,7 +36,7 @@ Devvit.addMenuItem({
   },
 });
 
-async function updateModStats(context: Devvit.Context | JobContext) {
+async function updateModStats(context: Devvit.Context | JobContext, full: boolean) {
   const updatedDate = new Date, updatedDatetime_global = new Datetime_global(updatedDate, 'UTC'),
     formatted = datetime_local_toUTCString(updatedDatetime_global);
   try {
@@ -53,9 +53,10 @@ async function updateModStats(context: Devvit.Context | JobContext) {
     let totalActions = 0;
 
     for (const action of modActions) {
-      totalActions++;
+      const when = action.createdAt, modUsername = action?.moderatorName, actionNameType = action?.type;
 
-      const modUsername = action?.moderatorName, actionNameType = action?.type;
+      if (!full && when.getUTCHours() !== updatedDate.getUTCHours()) continue;
+      totalActions++;
 
       // Count by moderator
       if (!modCounts[modUsername]) {
@@ -76,7 +77,7 @@ async function updateModStats(context: Devvit.Context | JobContext) {
         }
         actionCountsNoAutoModSticky[actionNameType]++;
       }
-      const when = action.createdAt, existingEntry = lastModActionTaken[modUsername] ?? 0;
+      const existingEntry = lastModActionTaken[modUsername] ?? 0;
 
       lastModActionTaken[modUsername] = +existingEntry < +when ? when : new Date(existingEntry);
     }
@@ -118,7 +119,7 @@ async function updateModStats(context: Devvit.Context | JobContext) {
     // Update the wiki page
     await context.reddit.updateWikiPage({
       subredditName,
-      page: 'mod-stats',
+      page: 'mod-stats-' + updatedDatetime_global.format('Y-m-d\\TH_i_s\\Z'),
       content: wikiContent,
       reason: `Daily mod stats update (${formatted})`,
     });
@@ -131,20 +132,23 @@ async function updateModStats(context: Devvit.Context | JobContext) {
 
 
 function generateWikiContent(datetimeLocal: Datetime_global, mods: any, actions: any, actionsNoAutoMod: any,
-  totalActions: number, lastModActionTaken: { [moderator: string]: Date }, now: Date) {
+  totalActions: number/*, lastModActionTaken: { [moderator: string]: Date }, now: Date*/) {
   let content = `# Moderator Activity Statistics\n\n`;
-  content += `*Last updated: ${datetime_local_toUTCString(datetimeLocal)}*\n\n`;
-  content += `Total Actions counted: ${totalActions}\n\n`;
+  content += `*Last updated: ${datetime_local_toUTCString(datetimeLocal)}*  \nhttps://developers.reddit.com/apps/modlogstats  `;
+  content += `\nTotal Actions counted: ${totalActions}\n\n`;
 
   // Most active moderators
   content += `## Most Active Moderators\n\n`;
-  content += `| Moderator | Actions | Percentage | Most Recent Action |\n`;
-  content += `|:----------|--------:|-----------:|-------------------:|\n`;
+  // content += `| Moderator | Actions | Percentage | Most Recent Action |\n`;
+  // content += `|:----------|--------:|-----------:|-------------------:|\n`;
+  content += `| Moderator | Actions | Percentage |\n`;
+  content += `|:----------|--------:|-----------:|\n`;
 
   mods.forEach(function (mod: any) {
-    const date = new Datetime_global(new Date(lastModActionTaken[mod.name]), 'UTC'), duration = date.until(now);
-    const formattee = DurationToHumanString.ToHistoryString.call(duration, datetimeLocal, 3);
-    content += `| u/${mod.name} | ${mod.count} | ${mod.percentage}% | ${formattee} (${datetime_local_toUTCString(date)}) |\n`;
+    // const date = new Datetime_global(new Date(lastModActionTaken[mod.name]), 'UTC'), duration = date.until(now);
+    // const formattee = DurationToHumanString.ToHistoryString.call(duration, datetimeLocal, 3);
+    // content += `| u/${mod.name} | ${mod.count} | ${mod.percentage}% | ${formattee} (${datetime_local_toUTCString(date)}) |\n`;
+    content += `| u/${mod.name} | ${mod.count} | ${mod.percentage}% |\n`;
   });
 
   // Top 10 actions
