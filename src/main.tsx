@@ -1,7 +1,7 @@
 // Visit developers.reddit.com/docs to learn Devvit!
 
 import { Devvit, JobContext } from '@devvit/public-api';
-import { Datetime_global, DurationToHumanString } from 'datetime_global/Datetime_global.js';
+import { Datetime_global } from 'datetime_global/Datetime_global.js';//, DurationToHumanString
 
 // Configure the app to use Reddit API
 Devvit.configure({ redditAPI: true });
@@ -112,14 +112,14 @@ async function updateModStats(context: Devvit.Context | JobContext, full: boolea
     // Generate wiki content
     const wikiContent = generateWikiContent(
       updatedDatetime_global, sortedMods, top10Actions,
-      top10ActionsNoAutoModSticky, totalActions, lastModActionTaken,
-      updatedDate
+      top10ActionsNoAutoModSticky, totalActions,
+      // lastModActionTaken, updatedDate,
     );
 
     // Update the wiki page
     await context.reddit.updateWikiPage({
       subredditName,
-      page: 'mod-stats-' + updatedDatetime_global.format('Y-m-d\\TH_i_s\\Z'),
+      page: 'mod-stats-' + updatedDatetime_global.format('H'),
       content: wikiContent,
       reason: `Daily mod stats update (${formatted})`,
     });
