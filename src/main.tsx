@@ -2,9 +2,9 @@
 
 import { Devvit, JobContext, ModAction } from '@devvit/public-api';
 import { Datetime_global } from 'datetime_global/Datetime_global.js';//, DurationToHumanString
-
+import { v4 as uuidv4 } from 'uuid';
 // Configure the app to use Reddit API
-Devvit.configure({ redis: true, /*modLog: true,*/ });
+Devvit.configure({ redis: true, });
 type ModActionEntry = { moderatorUsername: string, type: string, date: Date } | undefined;
 const keysKey = 'modlog_keys';
 
@@ -13,16 +13,13 @@ Devvit.addTrigger({
   async onEvent(event, { redis }) {
     // Extract relevant data from the event
     const type = event.action ?? 'unknown'; // Type of moderator action
-    // @ts -ignore
-    const moderatorUsername = event?.moderator?.name ?? null; // Moderator username
-    // @ts-ignore
-    const date = new Date(event.createdAt ?? new Date); // Date of action
-    // @ts-ignore
-    console.log(`modlog_${event.type.id}`);
-    // @ts-ignore
-    if (!('id' in event)) return;
+    const moderatorUsername = event?.moderator?.name; // Moderator username
+    const date = new Date(event.actionedAt ?? new Date); // Date of action
+    if (moderatorUsername === null) return;
+    const uuid = uuidv4();
+
     // Create a unique key for this modlog entry (e.g., using the mod action ID)
-    const key = `modlog_${event.id}`;
+    const key = `modlog_${uuid}`;
 
     const txn = await redis.watch(keysKey);
     await txn.multi();

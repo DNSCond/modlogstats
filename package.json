@@ -6,7 +6,8 @@
   "type": "module",
   "dependencies": {
     "@devvit/public-api": "0.11.15",
-    "datetime_global": "^0.4.3"
+    "datetime_global": "^0.4.3",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "typescript": "5.8.3"
