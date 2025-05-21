@@ -1,18 +1,68 @@
 // Visit developers.reddit.com/docs to learn Devvit!
 
-import { Devvit, JobContext } from '@devvit/public-api';
+import { Devvit, JobContext, ModAction } from '@devvit/public-api';
 import { Datetime_global } from 'datetime_global/Datetime_global.js';//, DurationToHumanString
 
 // Configure the app to use Reddit API
-Devvit.configure({ redditAPI: true });
+Devvit.configure({ redis: true, /*modLog: true,*/ });
+type ModActionEntry = { moderatorUsername: string, type: string, date: Date } | undefined;
+const keysKey = 'modlog_keys';
 
+Devvit.addTrigger({
+  event: 'ModAction', // Listen for modlog events
+  async onEvent(event, { redis }) {
+    // Extract relevant data from the event
+    const type = event.action ?? 'unknown'; // Type of moderator action
+    // @ts -ignore
+    const moderatorUsername = event?.moderator?.name ?? null; // Moderator username
+    // @ts-ignore
+    const date = new Date(event.createdAt ?? new Date); // Date of action
+    // @ts-ignore
+    console.log(`modlog_${event.type.id}`);
+    // @ts-ignore
+    if (!('id' in event)) return;
+    // Create a unique key for this modlog entry (e.g., using the mod action ID)
+    const key = `modlog_${event.id}`;
+
+    const txn = await redis.watch(keysKey);
+    await txn.multi();
+
+    // Store the data as a JSON string in Redis
+    await redis.set(key, JSON.stringify({ type, moderatorUsername, date, Source: event }),);
+    await redis.expire(key, 86400);
+
+    // Get the current modlog_keys array inside the transaction
+    const keysRaw = await txn.get(keysKey);
+    let keys: string[] = [];
+    if (keysRaw) {
+      try {
+        keys = JSON.parse(String(keysRaw));
+      } catch {
+        keys = [];
+      }
+    }
+    if (!keys.includes(key)) {
+      keys.push(key);
+    }
+    await txn.set(keysKey, JSON.stringify(keys));
+    await txn.exec();
+  },
+});
 // Schedule a daily task to update the wiki
 Devvit.addSchedulerJob({
   name: 'daily-mod-stats-update', // @ts-ignore
   schedule: '0 * * * *',
-  onRun: async (event, context) => {
+  async onRun(_event, context) {
     //const subreddit = await context.reddit.getSubredditByName(context.subreddit.name);
-    await updateModStats(context, false);
+    const subredditName: string = await context.reddit.getCurrentSubredditName();
+
+    await updateModStats(subredditName, await (async function (): Promise<ModActionEntry[]> {
+      const keys = await context.redis.get(keysKey), promise: ModActionEntry[] = [];
+      if (keys === undefined) return [];
+      for (const key of JSON.parse(keys)) {
+        promise.push(await context.redis.get(key) as unknown as ModActionEntry);
+      } return promise;
+    })(), context);
   },
 });
 function datetime_local_toUTCString(datetime_local: Datetime_global): string {
@@ -24,10 +74,16 @@ Devvit.addMenuItem({
   label: 'Update Mod Stats Now',
   location: 'subreddit',
   forUserType: 'moderator', // Only visible to moderators
-  onPress: async (_event, context) => {
+  async onPress(_event, context) {
     context.ui.showToast('Updating mod stats...');
     try {
-      await updateModStats(context, true);
+      const subredditName: string = await context.reddit.getCurrentSubredditName(),
+        modActions = await context.reddit.getModerationLog({ subredditName, limit: 1000, }).all();
+      await updateModStats(subredditName, modActions.map(function (event: ModAction): ModActionEntry {
+        const type = event.type ?? 'unknown'; // Type of moderator action
+        const moderatorUsername = event?.moderatorName; // Moderator username
+        return { type, moderatorUsername, date: new Date(event.createdAt) };
+      }), context);
       context.ui.showToast('Mod stats updated successfully!');
     } catch (error) {
       console.error('Error updating mod stats:', error);
@@ -36,13 +92,11 @@ Devvit.addMenuItem({
   },
 });
 
-async function updateModStats(context: Devvit.Context | JobContext, full: boolean) {
+async function updateModStats(subredditName: string, ModActionEntries: ModActionEntry[], context: Devvit.Context | JobContext) {
   const updatedDate = new Date, updatedDatetime_global = new Datetime_global(updatedDate, 'UTC'),
     formatted = datetime_local_toUTCString(updatedDatetime_global);
   try {
     // Get all mod actions from the log
-    const subredditName: string = await context.reddit.getCurrentSubredditName(),
-      modActions = await context.reddit.getModerationLog({ subredditName, limit: 1000, }).all();
 
     // Count actions by moderator and action type
     const modCounts: { [moderator: string]: number } = {};
@@ -52,10 +106,9 @@ async function updateModStats(context: Devvit.Context | JobContext, full: boolea
 
     let totalActions = 0;
 
-    for (const action of modActions) {
-      const when = action.createdAt, modUsername = action?.moderatorName, actionNameType = action?.type;
-
-      if (!full && when.getUTCHours() !== updatedDate.getUTCHours()) continue;
+    for (const action of ModActionEntries) {
+      if (action === undefined) continue;
+      const when = action.date, modUsername = action.moderatorUsername, actionNameType = action.type;
       totalActions++;
 
       // Count by moderator
