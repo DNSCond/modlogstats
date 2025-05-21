@@ -1,20 +1,82 @@
 // Visit developers.reddit.com/docs to learn Devvit!
 
-import { Devvit, JobContext } from '@devvit/public-api';
-import { Datetime_global, DurationToHumanString } from 'datetime_global/Datetime_global.js';
+import { Devvit, JobContext, ModAction } from '@devvit/public-api';
+import { Datetime_global } from 'datetime_global/Datetime_global.js';//, DurationToHumanString
+import { v4 as uuidv4 } from 'uuid';
 
 // Configure the app to use Reddit API
-Devvit.configure({ redditAPI: true });
+Devvit.configure({ redditAPI: true, redis: true, });
+type ModActionEntry = { moderatorUsername: string, type: string, date: Date } | undefined;
+const keysKey = 'modlog_keys';
+
+Devvit.addTrigger({
+  event: 'ModAction', // Listen for modlog events
+  async onEvent(event, { redis }) {
+    // Extract relevant data from the event
+    const type = event.action ?? 'unknown'; // Type of moderator action
+    const moderatorUsername = event?.moderator?.name; // Moderator username
+    const date = new Date(event.actionedAt ?? new Date); // Date of action
+    if (moderatorUsername === null) return;
+    const uuid = uuidv4();
+
+    // Create a unique key for this modlog entry (e.g., using the mod action ID)
+    const key = `modlog_${uuid}`;
+
+    // Store the data as a JSON string in Redis
+    await redis.set(key, JSON.stringify({ type, moderatorUsername, date, Source: event }),);
+    await redis.expire(key, 86400);
+
+    // Get the current modlog_keys array inside the transaction
+    const keysRaw = await redis.get(keysKey);
+    let keys: string[] = [];
+    if (keysRaw) {
+      try {
+        keys = JSON.parse(keysRaw);
+      } catch {
+        keys = [];
+      }
+    }
+    if (!keys.includes(key)) {
+      keys.push(key);
+    }
+    await redis.set(keysKey, JSON.stringify(keys));
+  },
+});
+
+function normalize_newlines(string: string) {
+  return String(string).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+function indent_codeblock(string: string) {
+  return '    ' + normalize_newlines(string).replace(/\n/g, '\n    ');
+}
+
+function jsonEncode(jsonicItem: any, indent: boolean | number = false, replacer?: (this: any, key: string, value: any) => any): string {
+  if (indent === false) return JSON.stringify(jsonicItem, replacer);
+  else return JSON.stringify(jsonicItem, replacer, indent === true ? 4 : +indent);
+}
+function jsonEncodeIndent(jsonicItem: any, indent: boolean | number = true, replacer?: (this: any, key: string, value: any) => any): string {
+  if (indent === false) return indent_codeblock(JSON.stringify(jsonicItem, replacer));
+  else return indent_codeblock(JSON.stringify(jsonicItem, replacer, indent === true ? 4 : +indent));
+}
 
 // Schedule a daily task to update the wiki
 Devvit.addSchedulerJob({
   name: 'daily-mod-stats-update', // @ts-ignore
-  schedule: '0 0 * * *', // Run at midnight every day
-  onRun: async (event, context) => {
+  schedule: '0 * * * *',
+  async onRun(_event, context) {
     //const subreddit = await context.reddit.getSubredditByName(context.subreddit.name);
-    await updateModStats(context);
+    const subredditName: string = await context.reddit.getCurrentSubredditName();
+
+    await updateModStats(subredditName, await (async function (): Promise<ModActionEntry[]> {
+      const keys = await context.redis.get(keysKey), promise: ModActionEntry[] = [];
+      if (keys === undefined) return [];
+      for (const key of JSON.parse(keys)) {
+        promise.push(await context.redis.get(key) as unknown as ModActionEntry);
+      } return promise;
+    })(), context, 'mod-stats-' + new Datetime_global().format('H'));
   },
 });
+
 function datetime_local_toUTCString(datetime_local: Datetime_global): string {
   return datetime_local.format('D, d M Y H:i:s \\U\\T\\C');
 }
@@ -24,10 +86,16 @@ Devvit.addMenuItem({
   label: 'Update Mod Stats Now',
   location: 'subreddit',
   forUserType: 'moderator', // Only visible to moderators
-  onPress: async (_event, context) => {
+  async onPress(_event, context) {
     context.ui.showToast('Updating mod stats...');
     try {
-      await updateModStats(context);
+      const subredditName: string = await context.reddit.getCurrentSubredditName(),
+        modActions = await context.reddit.getModerationLog({ subredditName, limit: 1000, }).all();
+      await updateModStats(subredditName, modActions.map(function (event: ModAction): ModActionEntry {
+        const type = event.type ?? 'unknown'; // Type of moderator action
+        const moderatorUsername = event?.moderatorName; // Moderator username
+        return { type, moderatorUsername, date: new Date(event.createdAt) };
+      }), context, 'modlog-stats');
       context.ui.showToast('Mod stats updated successfully!');
     } catch (error) {
       console.error('Error updating mod stats:', error);
@@ -36,13 +104,28 @@ Devvit.addMenuItem({
   },
 });
 
-async function updateModStats(context: Devvit.Context | JobContext) {
+/*Devvit.addMenuItem({
+  label: 'Update Mod Stats Now (devOnly)',
+  location: 'subreddit',
+  forUserType: 'moderator', // Only visible to moderators
+  async onPress(_event, context) {
+    context.ui.showToast('Updating mod stats...');
+    const subredditName: string = await context.reddit.getCurrentSubredditName();
+    await updateModStats(subredditName, await (async function (): Promise<ModActionEntry[]> {
+      const keys = await context.redis.get(keysKey), promise: ModActionEntry[] = [];
+      if (keys === undefined) return [];
+      for (const key of JSON.parse(keys)) {
+        promise.push(JSON.parse(await context.redis.get(key) ?? '{}') as unknown as ModActionEntry);
+      } return promise;
+    })(), context, 'mod-stats-' + new Datetime_global().format('H'));
+  },
+});*/
+
+async function updateModStats(subredditName: string, ModActionEntries: ModActionEntry[], context: Devvit.Context | JobContext, title: string) {
   const updatedDate = new Date, updatedDatetime_global = new Datetime_global(updatedDate, 'UTC'),
     formatted = datetime_local_toUTCString(updatedDatetime_global);
   try {
     // Get all mod actions from the log
-    const subredditName: string = await context.reddit.getCurrentSubredditName(),
-      modActions = await context.reddit.getModerationLog({ subredditName, limit: 1000, }).all();
 
     // Count actions by moderator and action type
     const modCounts: { [moderator: string]: number } = {};
@@ -52,10 +135,10 @@ async function updateModStats(context: Devvit.Context | JobContext) {
 
     let totalActions = 0;
 
-    for (const action of modActions) {
+    for (const action of ModActionEntries) {
+      if (action === undefined) continue;
+      const when = action.date, modUsername = action.moderatorUsername, actionNameType = action.type;
       totalActions++;
-
-      const modUsername = action?.moderatorName, actionNameType = action?.type;
 
       // Count by moderator
       if (!modCounts[modUsername]) {
@@ -76,7 +159,7 @@ async function updateModStats(context: Devvit.Context | JobContext) {
         }
         actionCountsNoAutoModSticky[actionNameType]++;
       }
-      const when = action.createdAt, existingEntry = lastModActionTaken[modUsername] ?? 0;
+      const existingEntry = lastModActionTaken[modUsername] ?? 0;
 
       lastModActionTaken[modUsername] = +existingEntry < +when ? when : new Date(existingEntry);
     }
@@ -111,14 +194,14 @@ async function updateModStats(context: Devvit.Context | JobContext) {
     // Generate wiki content
     const wikiContent = generateWikiContent(
       updatedDatetime_global, sortedMods, top10Actions,
-      top10ActionsNoAutoModSticky, totalActions, lastModActionTaken,
-      updatedDate
+      top10ActionsNoAutoModSticky, totalActions,
+      // lastModActionTaken, updatedDate,
     );
 
     // Update the wiki page
     await context.reddit.updateWikiPage({
       subredditName,
-      page: 'mod-stats',
+      page: title,
       content: wikiContent,
       reason: `Daily mod stats update (${formatted})`,
     });
@@ -131,20 +214,23 @@ async function updateModStats(context: Devvit.Context | JobContext) {
 
 
 function generateWikiContent(datetimeLocal: Datetime_global, mods: any, actions: any, actionsNoAutoMod: any,
-  totalActions: number, lastModActionTaken: { [moderator: string]: Date }, now: Date) {
+  totalActions: number/*, lastModActionTaken: { [moderator: string]: Date }, now: Date*/) {
   let content = `# Moderator Activity Statistics\n\n`;
-  content += `*Last updated: ${datetime_local_toUTCString(datetimeLocal)}*\n\n`;
-  content += `Total Actions counted: ${totalActions}\n\n`;
+  content += `*Last updated: ${datetime_local_toUTCString(datetimeLocal)}*  \nhttps://developers.reddit.com/apps/modlogstats  `;
+  content += `\nTotal Actions counted: ${totalActions}\n\n`;
 
   // Most active moderators
   content += `## Most Active Moderators\n\n`;
-  content += `| Moderator | Actions | Percentage | Most Recent Action |\n`;
-  content += `|:----------|--------:|-----------:|-------------------:|\n`;
+  // content += `| Moderator | Actions | Percentage | Most Recent Action |\n`;
+  // content += `|:----------|--------:|-----------:|-------------------:|\n`;
+  content += `| Moderator | Actions | Percentage |\n`;
+  content += `|:----------|--------:|-----------:|\n`;
 
   mods.forEach(function (mod: any) {
-    const date = new Datetime_global(new Date(lastModActionTaken[mod.name]), 'UTC'), duration = date.until(now);
-    const formattee = DurationToHumanString.ToHistoryString.call(duration, datetimeLocal, 3);
-    content += `| u/${mod.name} | ${mod.count} | ${mod.percentage}% | ${formattee} (${datetime_local_toUTCString(date)}) |\n`;
+    // const date = new Datetime_global(new Date(lastModActionTaken[mod.name]), 'UTC'), duration = date.until(now);
+    // const formattee = DurationToHumanString.ToHistoryString.call(duration, datetimeLocal, 3);
+    // content += `| u/${mod.name} | ${mod.count} | ${mod.percentage}% | ${formattee} (${datetime_local_toUTCString(date)}) |\n`;
+    content += `| u/${mod.name} | ${mod.count} | ${mod.percentage}% |\n`;
   });
 
   // Top 10 actions
