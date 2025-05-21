@@ -3,8 +3,9 @@
 import { Devvit, JobContext, ModAction } from '@devvit/public-api';
 import { Datetime_global } from 'datetime_global/Datetime_global.js';//, DurationToHumanString
 import { v4 as uuidv4 } from 'uuid';
+
 // Configure the app to use Reddit API
-Devvit.configure({ redis: true, });
+Devvit.configure({ redditAPI: true, redis: true, });
 type ModActionEntry = { moderatorUsername: string, type: string, date: Date } | undefined;
 const keysKey = 'modlog_keys';
 
@@ -21,19 +22,16 @@ Devvit.addTrigger({
     // Create a unique key for this modlog entry (e.g., using the mod action ID)
     const key = `modlog_${uuid}`;
 
-    const txn = await redis.watch(keysKey);
-    await txn.multi();
-
     // Store the data as a JSON string in Redis
     await redis.set(key, JSON.stringify({ type, moderatorUsername, date, Source: event }),);
     await redis.expire(key, 86400);
 
     // Get the current modlog_keys array inside the transaction
-    const keysRaw = await txn.get(keysKey);
+    const keysRaw = await redis.get(keysKey);
     let keys: string[] = [];
     if (keysRaw) {
       try {
-        keys = JSON.parse(String(keysRaw));
+        keys = JSON.parse(keysRaw);
       } catch {
         keys = [];
       }
@@ -41,10 +39,26 @@ Devvit.addTrigger({
     if (!keys.includes(key)) {
       keys.push(key);
     }
-    await txn.set(keysKey, JSON.stringify(keys));
-    await txn.exec();
+    await redis.set(keysKey, JSON.stringify(keys));
   },
 });
+
+function normalize_newlines(string: string) {
+  return String(string).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+function indent_codeblock(string: string) {
+  return '    ' + normalize_newlines(string).replace(/\n/g, '\n    ');
+}
+
+function jsonEncode(jsonicItem: any, indent: boolean | number = false, replacer?: (this: any, key: string, value: any) => any): string {
+  if (indent === false) return JSON.stringify(jsonicItem, replacer);
+  else return JSON.stringify(jsonicItem, replacer, indent === true ? 4 : +indent);
+}
+function jsonEncodeIndent(jsonicItem: any, indent: boolean | number = true, replacer?: (this: any, key: string, value: any) => any): string {
+  if (indent === false) return indent_codeblock(JSON.stringify(jsonicItem, replacer));
+  else return indent_codeblock(JSON.stringify(jsonicItem, replacer, indent === true ? 4 : +indent));
+}
+
 // Schedule a daily task to update the wiki
 Devvit.addSchedulerJob({
   name: 'daily-mod-stats-update', // @ts-ignore
@@ -59,9 +73,10 @@ Devvit.addSchedulerJob({
       for (const key of JSON.parse(keys)) {
         promise.push(await context.redis.get(key) as unknown as ModActionEntry);
       } return promise;
-    })(), context);
+    })(), context, 'mod-stats-' + new Datetime_global().format('H'));
   },
 });
+
 function datetime_local_toUTCString(datetime_local: Datetime_global): string {
   return datetime_local.format('D, d M Y H:i:s \\U\\T\\C');
 }
@@ -80,7 +95,7 @@ Devvit.addMenuItem({
         const type = event.type ?? 'unknown'; // Type of moderator action
         const moderatorUsername = event?.moderatorName; // Moderator username
         return { type, moderatorUsername, date: new Date(event.createdAt) };
-      }), context);
+      }), context, 'modlog-stats');
       context.ui.showToast('Mod stats updated successfully!');
     } catch (error) {
       console.error('Error updating mod stats:', error);
@@ -89,7 +104,24 @@ Devvit.addMenuItem({
   },
 });
 
-async function updateModStats(subredditName: string, ModActionEntries: ModActionEntry[], context: Devvit.Context | JobContext) {
+/*Devvit.addMenuItem({
+  label: 'Update Mod Stats Now (devOnly)',
+  location: 'subreddit',
+  forUserType: 'moderator', // Only visible to moderators
+  async onPress(_event, context) {
+    context.ui.showToast('Updating mod stats...');
+    const subredditName: string = await context.reddit.getCurrentSubredditName();
+    await updateModStats(subredditName, await (async function (): Promise<ModActionEntry[]> {
+      const keys = await context.redis.get(keysKey), promise: ModActionEntry[] = [];
+      if (keys === undefined) return [];
+      for (const key of JSON.parse(keys)) {
+        promise.push(JSON.parse(await context.redis.get(key) ?? '{}') as unknown as ModActionEntry);
+      } return promise;
+    })(), context, 'mod-stats-' + new Datetime_global().format('H'));
+  },
+});*/
+
+async function updateModStats(subredditName: string, ModActionEntries: ModActionEntry[], context: Devvit.Context | JobContext, title: string) {
   const updatedDate = new Date, updatedDatetime_global = new Datetime_global(updatedDate, 'UTC'),
     formatted = datetime_local_toUTCString(updatedDatetime_global);
   try {
@@ -169,7 +201,7 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
     // Update the wiki page
     await context.reddit.updateWikiPage({
       subredditName,
-      page: 'mod-stats-' + updatedDatetime_global.format('H'),
+      page: title,
       content: wikiContent,
       reason: `Daily mod stats update (${formatted})`,
     });
