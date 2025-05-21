@@ -18,6 +18,12 @@ and "Top 10 Actions (excluding AutoModerator stickies)" because automoderator's 
 
 ## changelog
 
+###  0.1.1
+
+- changed so it reports hourly, if a hour ever gets repeated then it is lost.
+- internally: changed so it saves to redis for longer savings
+- other internal changes i cant remember so they probably not imporant
+
 ### 0.0.3
 
 - added most recent time and action counter
