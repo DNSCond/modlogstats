@@ -18,6 +18,12 @@ and "Top 10 Actions (excluding AutoModerator stickies)" because automoderator's 
 
 ## changelog
 
+###  0.1.3
+
+- changed so it reports daily
+- you now teleport when manually update it
+- other internal changes i cant remember so they probably not imporant
+
 ###  0.1.1
 
 - changed so it reports hourly, if a hour ever gets repeated then it is lost.
