@@ -63,17 +63,24 @@ Devvit.addMenuItem({
     location: 'subreddit',
     forUserType: 'moderator', // Only visible to moderators
     async onPress(_event, context) {
-        await updateFromQueue(context);
+        try {
+            await updateFromQueue(context);
+        } catch (e) {
+            context.ui.showToast('Failed to update mod stats. Check logs for details.');
+        }
     },
 });
 
 // Schedule a daily task to update the wiki
 Devvit.addSchedulerJob({
     name: 'daily-mod-stats-update', // @ts-ignore
-    schedule: '0 * * * *',
+    schedule: '* * * * *',
+    // schedule: '0 * * * *',
     async onRun(_event, context) {
         //const subreddit = await context.reddit.getSubredditByName(context.subreddit.name);
-        await updateFromQueue(context);
+        try {
+            await updateFromQueue(context);
+        } catch (e) { console.error(e); throw e; }
     },
 });
 
