@@ -1,6 +1,6 @@
 // Visit developers.reddit.com/docs to learn Devvit!
 
-import { Devvit, JobContext, ModAction } from '@devvit/public-api';
+import { Devvit, JobContext, ModAction, TriggerContext } from '@devvit/public-api';
 import { Datetime_global } from 'datetime_global/Datetime_global.js';//, DurationToHumanString
 import { v4 as uuidv4 } from 'uuid';
 
@@ -46,10 +46,10 @@ function jsonEncodeIndent(jsonicItem: any, indent: boolean | number = true, repl
 
 async function updateFromQueue(context: JobContext | Devvit.Context) {
     const today_ = new Date, subredditName: string = await context.reddit.getCurrentSubredditName(), redis = context.redis;
-    today_.setUTCDate(today_.getUTCDate() - 1);// --warn
+    //today_.setUTCDate(today_.getUTCDate() - 1);// --warn
     const today = new Datetime_global(today_.setUTCHours(0, 0, 0, 0), 'UTC');
     await updateModStats(subredditName, await (async function (): Promise<ModActionEntry[]> {
-        const items = await redis.hGetAll('modlog' + today.format('Y-m-d')),
+        const items = await redis.hGetAll('modlog:' + today.format('Y-m-d')),
             promise: ModActionEntry[] = [];
         for (const entry of Object.values(items)) {
             promise.push(JSON.parse(entry as string) as ModActionEntry);
@@ -63,17 +63,40 @@ Devvit.addMenuItem({
     location: 'subreddit',
     forUserType: 'moderator', // Only visible to moderators
     async onPress(_event, context) {
-        await updateFromQueue(context);
+        try {
+            await updateFromQueue(context);
+        } catch (e) {
+            context.ui.showToast('Failed to update mod stats. Check logs for details.');
+        }
     },
 });
 
+const daily_mod_stats_update = 'daily-mod-stats-update';
 // Schedule a daily task to update the wiki
 Devvit.addSchedulerJob({
-    name: 'daily-mod-stats-update', // @ts-ignore
-    schedule: '0 * * * *',
+    name: daily_mod_stats_update,
+    // schedule: '0 * * * *',
     async onRun(_event, context) {
-        //const subreddit = await context.reddit.getSubredditByName(context.subreddit.name);
         await updateFromQueue(context);
+    },
+});
+async function update(context: TriggerContext) {
+    const oldJobId = await context.redis.get('jobId'); if (oldJobId) context.scheduler.cancelJob(oldJobId);
+    const jobId = await context.scheduler.runJob({ name: daily_mod_stats_update, cron: '0 0 * * *', data: {}, });
+    await context.redis.set('jobId', jobId);
+}
+
+Devvit.addTrigger({
+    event: 'AppInstall',
+    async onEvent(_, context) {
+        update(context);
+    },
+});
+
+Devvit.addTrigger({
+    event: 'AppUpgrade',
+    async onEvent(_, context) {
+        update(context);
     },
 });
 
@@ -108,90 +131,86 @@ Devvit.addMenuItem({
 async function updateModStats(subredditName: string, ModActionEntries: ModActionEntry[], context: Devvit.Context | JobContext, title: string) {
     const updatedDate = new Date, updatedDatetime_global = new Datetime_global(updatedDate, 'UTC'),
         formatted = datetime_local_toUTCString(updatedDatetime_global);
-    try {
-        // Get all mod actions from the log
+    // Get all mod actions from the log
 
-        // Count actions by moderator and action type
-        const modCounts: { [moderator: string]: number } = {};
-        const actionCounts: { [actionName: string]: number } = {};
-        const actionCountsNoAutoModSticky: { [actionName: string]: number } = {};
-        const lastModActionTaken: { [moderator: string]: Date } = {};
+    // Count actions by moderator and action type
+    const modCounts: { [moderator: string]: number } = {};
+    const actionCounts: { [actionName: string]: number } = {};
+    const actionCountsNoAutoModSticky: { [actionName: string]: number } = {};
+    const lastModActionTaken: { [moderator: string]: Date } = {};
 
-        let totalActions = 0;
+    let totalActions = 0;
 
-        for (const action of ModActionEntries) {
-            if (action === undefined) continue;
-            const when = action.date, modUsername = action.moderatorUsername, actionNameType = action.type;
-            totalActions++;
+    for (const action of ModActionEntries) {
+        if (action === undefined) continue;
+        const when = action.date, modUsername = action.moderatorUsername, actionNameType = action.type;
+        totalActions++;
 
-            // Count by moderator
-            if (!modCounts[modUsername]) {
-                modCounts[modUsername] = 0;
-            }
-            modCounts[modUsername]++;
-
-            // Count by action type
-            if (!actionCounts[actionNameType]) {
-                actionCounts[actionNameType] = 0;
-            }
-            actionCounts[actionNameType]++;
-
-            // Count actions excluding AutoMod stickies
-            if (!(actionNameType === 'sticky' && modUsername === 'AutoModerator')) {
-                if (!actionCountsNoAutoModSticky[actionNameType]) {
-                    actionCountsNoAutoModSticky[actionNameType] = 0;
-                }
-                actionCountsNoAutoModSticky[actionNameType]++;
-            }
-            const existingEntry = lastModActionTaken[modUsername] ?? 0;
-
-            lastModActionTaken[modUsername] = +existingEntry < +when ? when : new Date(existingEntry);
+        // Count by moderator
+        if (!modCounts[modUsername]) {
+            modCounts[modUsername] = 0;
         }
+        modCounts[modUsername]++;
 
-        // Sort moderators by action count
-        const sortedMods = Object.entries(modCounts)
-            .sort((a, b) => b[1] - a[1])
-            .map(([mod, count]) => ({
-                name: mod,
-                count,
-                percentage: ((count / totalActions) * 100).toFixed(2)
-            }));
+        // Count by action type
+        if (!actionCounts[actionNameType]) {
+            actionCounts[actionNameType] = 0;
+        }
+        actionCounts[actionNameType]++;
 
-        // Get top 10 actions
-        const top10Actions = Object.entries(actionCounts)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 10)
-            .map(([action, count]) => ({
-                name: action,
-                count,
-            }));
+        // Count actions excluding AutoMod stickies
+        if (!(actionNameType === 'sticky' && modUsername === 'AutoModerator')) {
+            if (!actionCountsNoAutoModSticky[actionNameType]) {
+                actionCountsNoAutoModSticky[actionNameType] = 0;
+            }
+            actionCountsNoAutoModSticky[actionNameType]++;
+        }
+        const existingEntry = lastModActionTaken[modUsername] ?? 0;
 
-        // Get top 10 actions without AutoMod stickies
-        const top10ActionsNoAutoModSticky = Object.entries(actionCountsNoAutoModSticky)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 10)
-            .map(([action, count]) => ({
-                name: action,
-                count,
-            }));
-
-        // Generate wiki content
-        const wikiContent = generateWikiContent(
-            updatedDatetime_global, sortedMods, top10Actions,
-            top10ActionsNoAutoModSticky, totalActions,
-            // lastModActionTaken, updatedDate,
-        );
-
-        // Update the wiki page
-        return await context.reddit.updateWikiPage({
-            subredditName,
-            page: title,
-            content: wikiContent,
-            reason: `Daily mod stats update (${formatted})`,
-        });
-    } catch (error) {
-        console.error('Error updating mod stats:', error);
+        lastModActionTaken[modUsername] = +existingEntry < +when ? when : new Date(existingEntry);
     }
+
+    // Sort moderators by action count
+    const sortedMods = Object.entries(modCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([mod, count]) => ({
+            name: mod,
+            count,
+            percentage: ((count / totalActions) * 100).toFixed(2)
+        }));
+
+    // Get top 10 actions
+    const top10Actions = Object.entries(actionCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([action, count]) => ({
+            name: action,
+            count,
+        }));
+
+    // Get top 10 actions without AutoMod stickies
+    const top10ActionsNoAutoModSticky = Object.entries(actionCountsNoAutoModSticky)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([action, count]) => ({
+            name: action,
+            count,
+        }));
+
+    // Generate wiki content
+    const wikiContent = generateWikiContent(
+        updatedDatetime_global, sortedMods, top10Actions,
+        top10ActionsNoAutoModSticky, totalActions,
+        // lastModActionTaken, updatedDate,
+    );
+
+    // Update the wiki page
+    return await context.reddit.updateWikiPage({
+        subredditName,
+        page: title,
+        content: wikiContent,
+        reason: `Daily mod stats update (${formatted})`,
+    });
 }
 
 
