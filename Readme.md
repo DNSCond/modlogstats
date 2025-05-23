@@ -18,6 +18,13 @@ and "Top 10 Actions (excluding AutoModerator stickies)" because automoderator's 
 
 ## changelog
 
+###  0.2.1
+
+- added an all time option (250 day in the past at most)
+- added a timezone option for those that want the bot to display in their timezone.
+  (just search your iana timezone, should be somewhere)
+- other internal changes that are not imporant.
+
 ###  0.2.0
 
 - added 2 settings
