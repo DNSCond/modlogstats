@@ -8,6 +8,18 @@ import { v4 as uuidv4 } from 'uuid';
 Devvit.configure({ redditAPI: true, redis: true, });
 type ModActionEntry = { moderatorUsername: string, type: string, date: Date } | undefined;
 
+Devvit.addSettings([
+    {
+        type: 'boolean',
+        name: 'daily-modmail-enabled',
+        label: 'Enable daily modmail notification',
+    }, {
+        type: 'boolean',
+        name: 'breakdown-each-mod',
+        label: 'per mod statistics?',
+    },
+]);
+
 Devvit.addTrigger({
     event: 'ModAction', // Listen for modlog events
     async onEvent(event, { redis }) {
@@ -45,29 +57,38 @@ function jsonEncodeIndent(jsonicItem: any, indent: boolean | number = true, repl
 }
 
 async function updateFromQueue(context: JobContext | Devvit.Context) {
-    const today_ = new Date, subredditName: string = await context.reddit.getCurrentSubredditName(), redis = context.redis;
-    //today_.setUTCDate(today_.getUTCDate() - 1);// --warn
-    const today = new Datetime_global(today_.setUTCHours(0, 0, 0, 0), 'UTC');
-    await updateModStats(subredditName, await (async function (): Promise<ModActionEntry[]> {
+    const today_ = new Date, redis = context.redis, tomorrow = new Date(today_),
+        subredditName: string = await context.reddit.getCurrentSubredditName();
+    const today = new Datetime_global(today_.setUTCDate(today_.getUTCDate() - 1), 'UTC'),
+        breakdownEachMod: boolean = await context.settings.get('breakdown-each-mod') ?? false;
+    const wikipage = await updateModStats(subredditName, await (async function (): Promise<ModActionEntry[]> {
         const items = await redis.hGetAll('modlog:' + today.format('Y-m-d')),
             promise: ModActionEntry[] = [];
         for (const entry of Object.values(items)) {
             promise.push(JSON.parse(entry as string) as ModActionEntry);
         }
         return promise;
-    })(), context, 'mod-stats-' + today.format('H'));
+    })(), context, 'modlog-stats', {
+        date: new Date(tomorrow), breakdownEachMod,
+        reason: `Daily update at ${datetime_local_toUTCString(tomorrow)}`,
+    });
+
+    const enabled = await context.settings.get('daily-modmail-enabled');
+    if (enabled) {
+        const conversationId = await context.reddit.modMail.createModInboxConversation({
+            subject: 'Daily Notification',
+            bodyMarkdown: wikipage.content,
+            subredditId: context.subredditId,
+        });
+    }
 }
 
 Devvit.addMenuItem({
-    label: 'Update Mod Stats Now (Queue)',
+    label: 'Update Mod Stats Now (debug)',
     location: 'subreddit',
     forUserType: 'moderator', // Only visible to moderators
     async onPress(_event, context) {
-        try {
-            await updateFromQueue(context);
-        } catch (e) {
-            context.ui.showToast('Failed to update mod stats. Check logs for details.');
-        }
+        await updateFromQueue(context);
     },
 });
 
@@ -75,33 +96,32 @@ const daily_mod_stats_update = 'daily-mod-stats-update';
 // Schedule a daily task to update the wiki
 Devvit.addSchedulerJob({
     name: daily_mod_stats_update,
-    // schedule: '0 * * * *',
     async onRun(_event, context) {
         await updateFromQueue(context);
     },
 });
 async function update(context: TriggerContext) {
-    const oldJobId = await context.redis.get('jobId'); if (oldJobId) context.scheduler.cancelJob(oldJobId);
-    const jobId = await context.scheduler.runJob({ name: daily_mod_stats_update, cron: '0 0 * * *', data: {}, });
+    const oldJobId = await context.redis.get('jobId'); if (oldJobId) await context.scheduler.cancelJob(oldJobId);
+    const jobId = await context.scheduler.runJob({ name: daily_mod_stats_update, cron: '1 0 * * *', data: {}, });
     await context.redis.set('jobId', jobId);
 }
 
 Devvit.addTrigger({
     event: 'AppInstall',
     async onEvent(_, context) {
-        update(context);
+        await update(context);
     },
 });
 
 Devvit.addTrigger({
     event: 'AppUpgrade',
     async onEvent(_, context) {
-        update(context);
+        await update(context);
     },
 });
 
-function datetime_local_toUTCString(datetime_local: Datetime_global): string {
-    return datetime_local.format('D, d M Y H:i:s \\U\\T\\C');
+function datetime_local_toUTCString(datetime_local: Datetime_global | Date): string {
+    return new Datetime_global(datetime_local, 'UTC').format('D, d M Y H:i:s \\U\\T\\C');
 }
 
 // Add a menu item to manually trigger the update
@@ -111,6 +131,7 @@ Devvit.addMenuItem({
     forUserType: 'moderator', // Only visible to moderators
     async onPress(_event, context) {
         context.ui.showToast('Updating mod stats...');
+        const now = new Date(), breakdownEachMod: boolean = await context.settings.get('breakdown-each-mod') ?? false;
         try {
             const subredditName: string = await context.reddit.getCurrentSubredditName(),
                 modActions = await context.reddit.getModerationLog({ subredditName, limit: 1000, }).all();
@@ -118,7 +139,10 @@ Devvit.addMenuItem({
                 const type = event.type ?? 'unknown'; // Type of moderator action
                 const moderatorUsername = event?.moderatorName; // Moderator username
                 return { type, moderatorUsername, date: new Date(event.createdAt) };
-            }), context, 'modlog-stats');
+            }), context, 'modlog-stats', {
+                date: now, breakdownEachMod,
+                reason: `manual update at ${datetime_local_toUTCString(now)}`,
+            });
             context.ui.showToast('Mod stats updated successfully!');
             if (page !== undefined) context.ui.navigateTo(`https://www.reddit.com/r/${page.subredditName}/wiki/${page.name}/`);
         } catch (error) {
@@ -128,16 +152,58 @@ Devvit.addMenuItem({
     },
 });
 
-async function updateModStats(subredditName: string, ModActionEntries: ModActionEntry[], context: Devvit.Context | JobContext, title: string) {
-    const updatedDate = new Date, updatedDatetime_global = new Datetime_global(updatedDate, 'UTC'),
-        formatted = datetime_local_toUTCString(updatedDatetime_global);
+type ModBreakdown = {
+    moderatorUsername: string;
+    actions: { name: string; count: number }[];
+};
+
+function getSortedModBreakdown(
+    entries: ModActionEntry[],
+    sortedMods: string[]
+): ModBreakdown[] {
+    const breakdownMap: Record<string, Record<string, number>> = {};
+
+    for (const entry of entries) {
+        if (!entry) continue;
+        const { moderatorUsername, type } = entry;
+        if (!breakdownMap[moderatorUsername]) {
+            breakdownMap[moderatorUsername] = {};
+        }
+        breakdownMap[moderatorUsername][type] = (breakdownMap[moderatorUsername][type] || 0) + 1;
+    }
+
+    const unsortedBreakdowns: Record<string, ModBreakdown> = Object.fromEntries(
+        Object.entries(breakdownMap).map(([moderatorUsername, actions]) => [
+            moderatorUsername,
+            {
+                moderatorUsername,
+                actions: Object.entries(actions)
+                    .map(([name, count]) => ({ name, count }))
+                    .sort((a, b) => b.count - a.count), // most to least frequent per mod
+            },
+        ])
+    );
+
+    // Sort mods by the given list
+    return sortedMods.map((mod) => unsortedBreakdowns[mod])
+        .filter((x): x is ModBreakdown => x !== undefined);
+}
+
+
+async function updateModStats(subredditName: string, ModActionEntries: ModActionEntry[],
+    context: Devvit.Context | JobContext, title: string, options: {
+        date: Date, reason: string, breakdownEachMod: boolean,
+    }) {
+    const updatedDate = new Date(options.date), reason = options.reason,
+        updatedDatetime_global = new Datetime_global(updatedDate, 'UTC');
     // Get all mod actions from the log
 
     // Count actions by moderator and action type
-    const modCounts: { [moderator: string]: number } = {};
-    const actionCounts: { [actionName: string]: number } = {};
-    const actionCountsNoAutoModSticky: { [actionName: string]: number } = {};
-    const lastModActionTaken: { [moderator: string]: Date } = {};
+    const modCounts: { [moderator: string]: number } = {},
+        actionCounts: { [actionName: string]: number } = {},
+        lastModActionTaken: { [moderator: string]: Date } = {},
+        actionCountsNoAutoModSticky: { [actionName: string]: number } = {},
+        breakdownEachMod: boolean = options.breakdownEachMod;
 
     let totalActions = 0;
 
@@ -171,11 +237,10 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
     }
 
     // Sort moderators by action count
-    const sortedMods = Object.entries(modCounts)
+    const sortedMods: { name: string, count: number, percentage: string }[] = Object.entries(modCounts)
         .sort((a, b) => b[1] - a[1])
         .map(([mod, count]) => ({
-            name: mod,
-            count,
+            name: mod, count,
             percentage: ((count / totalActions) * 100).toFixed(2)
         }));
 
@@ -197,28 +262,33 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
             count,
         }));
 
+    const breakdownPerMod = getSortedModBreakdown(ModActionEntries, sortedMods.map(s => s.name));
+
     // Generate wiki content
     const wikiContent = generateWikiContent(
         updatedDatetime_global, sortedMods, top10Actions,
         top10ActionsNoAutoModSticky, totalActions,
-        // lastModActionTaken, updatedDate,
+        subredditName, { breakdownPerMod, breakdownEachMod },
     );
 
     // Update the wiki page
-    return await context.reddit.updateWikiPage({
-        subredditName,
-        page: title,
-        content: wikiContent,
-        reason: `Daily mod stats update (${formatted})`,
-    });
+    return await context.reddit.updateWikiPage({ subredditName, page: title, content: wikiContent, reason, });
 }
 
+function sumArray(self: number[]): number {
+    function sum(accumulator: number, currentValue: number): number {
+        return accumulator + currentValue;
+    }
+    return self.reduce(sum, 0);
+}
 
-function generateWikiContent(datetimeLocal: Datetime_global, mods: any, actions: any, actionsNoAutoMod: any,
-    totalActions: number/*, lastModActionTaken: { [moderator: string]: Date }, now: Date*/) {
+function generateWikiContent(datetimeLocal: Datetime_global, mods: any, actions: any,
+    actionsNoAutoMod: any, totalActions: number, subredditName: string, options: {
+        breakdownPerMod: ModBreakdown[], breakdownEachMod: boolean,
+    }) {
     let content = `# Moderator Activity Statistics\n\n`;
-    content += `*Last updated: ${datetime_local_toUTCString(datetimeLocal)}*  \nhttps://developers.reddit.com/apps/modlogstats  `;
-    content += `\nTotal Actions counted: ${totalActions}\n\n`;
+    content += `*Last updated: ${datetime_local_toUTCString(datetimeLocal)}*  \n[view your summery here](https://www.reddit.com/r/${subredditName}/wiki/modlog-stats/)`;
+    content += `  \n[Generated By Moderator Statistics](https://developers.reddit.com/apps/modlogstats)  \nTotal Actions counted: ${totalActions}\n\n`;
 
     // Most active moderators
     content += `## Most Active Moderators\n\n`;
@@ -251,6 +321,21 @@ function generateWikiContent(datetimeLocal: Datetime_global, mods: any, actions:
     actionsNoAutoMod.forEach((action: any) => {
         content += `| ${action.name} | ${action.count} |\n`;
     });
+    let breakdownEachMod_content = '';
+    if (options.breakdownEachMod) {
+        breakdownEachMod_content += `\n## Breakdown Per Mod\n`;
+        options.breakdownPerMod.forEach(function (each: ModBreakdown) {
+            breakdownEachMod_content += `\n### Breakdown For u/${each.moderatorUsername}\n`;
+            breakdownEachMod_content += `\nTotal-Actions: ${sumArray(each.actions.map(a=>a.count))}\n\n`;
+            breakdownEachMod_content += `| Action | Count |\n`;
+            breakdownEachMod_content += `|:-------|------:|\n`;
+            each.actions.forEach(function (each_) {
+                breakdownEachMod_content += `| ${each_.name} | ${each_.count} |\n`;
+            });
+        });
+    }
+
+    content += `\n${breakdownEachMod_content}`;//content += `\n${indent_codeblock(breakdownEachMod_content)}`;
 
     return content;
 }

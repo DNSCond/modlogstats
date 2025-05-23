@@ -18,6 +18,18 @@ and "Top 10 Actions (excluding AutoModerator stickies)" because automoderator's 
 
 ## changelog
 
+###  0.2.0
+
+- added 2 settings
+  - 'per mod statistics?': if enabled it will breakdown each mod's actions.
+  - 'Enable daily modmail notification': if enabled it will send a modmail with the breakdown.
+- other internal changes i cant remember so they probably not imporant
+
+###  0.1.4
+
+- made it so it only uses `wiki/modlog-stats` for updates, beware.
+- updated action_reasons
+
 ###  0.1.3
 
 - changed so it reports daily
