@@ -22,7 +22,7 @@ Devvit.addSettings([
     }, {
         type: 'string',
         name: 'Timezone',
-        label: 'Timezone?',
+        label: 'Timezone?', defaultValue: "UTC",
         helpText: 'specify an iana timezone, some examples (Europe/Berlin, Asia/Tokyo, America/New_York)',
         onValidate({ value }) {
             try {

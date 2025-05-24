@@ -18,6 +18,11 @@ and "Top 10 Actions (excluding AutoModerator stickies)" because automoderator's 
 
 ## changelog
 
+###  0.2.2
+
+- added a list of common timezones at the bottom of this readme.
+- defaultValue: "UTC",
+
 ###  0.2.1
 
 - added an all time option (250 day in the past at most)
@@ -53,4 +58,63 @@ and "Top 10 Actions (excluding AutoModerator stickies)" because automoderator's 
 
 - added most recent time and action counter
 
-### 0.0.2 inital release
+### 0.0.2
+
+- inital release
+
+## list of popular iana timezones
+
+Source: https://g.co/gemini/share/4c734776d334
+
+if your timezone is not present, search for your iana timezone on a search engine
+
+- UTC (Coordinated Universal Time - the base)
+- Europe/London (GMT/BST - UK)
+- Europe/Paris (CET/CEST - France)
+- Europe/Berlin (CET/CEST - Germany)
+- Europe/Rome (CET/CEST - Italy)
+- Europe/Madrid (CET/CEST - Spain)
+- Europe/Warsaw (CET/CEST - Poland)
+- Europe/Moscow (MSK - Russia)
+- Europe/Istanbul (TRT - Turkey)
+- Europe/Athens (EET/EEST - Greece)
+- Africa/Cairo (EET/EEST - Egypt)
+- Africa/Johannesburg (SAST - South Africa)
+- Africa/Lagos (WAT - Nigeria)
+- Africa/Nairobi (EAT - Kenya)
+- America/New_York (EST/EDT - US East Coast)
+- America/Chicago (CST/CDT - US Central)
+- America/Denver (MST/MDT - US Mountain)
+- America/Los_Angeles (PST/PDT - US Pacific)
+- America/Anchorage (AKST/AKDT - Alaska, USA)
+- America/Honolulu (HST - Hawaii, USA)
+- America/Mexico_City (CST/CDT - Mexico)
+- America/Toronto (EST/EDT - Canada)
+- America/Vancouver (PST/PDT - Canada)
+- America/Sao_Paulo (BRT - Brazil)
+- America/Buenos_Aires (ART - Argentina)
+- America/Santiago (CLT/CLST - Chile)
+- America/Bogota (COT - Colombia)
+- America/Lima (PET - Peru)
+- Asia/Dubai (GST - UAE)
+- Asia/Kolkata (IST - India)
+- Asia/Bangkok (ICT - Thailand)
+- Asia/Jakarta (WIB - Indonesia)
+- Asia/Shanghai (CST - China)
+- Asia/Tokyo (JST - Japan)
+- Asia/Seoul (KST - South Korea)
+- Asia/Singapore (SGT - Singapore)
+- Asia/Kuala_Lumpur (MYT - Malaysia)
+- Asia/Hong_Kong (HKT - Hong Kong)
+- Asia/Jerusalem (IST/IDT - Israel)
+- Asia/Riyadh (AST - Saudi Arabia)
+- Australia/Sydney (AEST/AEDT - Australia East)
+- Australia/Melbourne (AEST/AEDT - Australia South-East)
+- Australia/Perth (AWST - Australia West)
+- Australia/Darwin (ACST - Australia North)
+- Pacific/Auckland (NZDT/NZST - New Zealand)
+- Pacific/Fiji (FJT/FJST - Fiji)
+- Pacific/Honolulu (HST - This is a repeat, let's swap for a different one)
+- Pacific/Tahiti (TAHT - French Polynesia)
+- Atlantic/Reykjavik (GMT - Iceland)
+- Indian/Mauritius (MUT - Mauritius)
