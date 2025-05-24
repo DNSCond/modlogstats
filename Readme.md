@@ -18,6 +18,10 @@ and "Top 10 Actions (excluding AutoModerator stickies)" because automoderator's 
 
 ## changelog
 
+###  0.2.3: minor changes (0.2.4: nothing)
+
+- changes it so logs expire 4 days instead of 2
+
 ###  0.2.2
 
 - added a list of common timezones at the bottom of this readme.

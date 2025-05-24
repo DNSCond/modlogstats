@@ -49,7 +49,7 @@ Devvit.addTrigger({
             entry: ModActionEntry = { type, moderatorUsername, date };
 
         await redis.hSet(hashKey, { [key]: JSON.stringify(entry) });
-        await redis.expire(hashKey, 172800);
+        await redis.expire(hashKey, 172800 * 4);
     },
 });
 
@@ -144,34 +144,15 @@ Devvit.addMenuItem({
 });
 
 const daily_mod_stats_update = 'daily-mod-stats-update';
-// Schedule a daily task to update the wiki
-Devvit.addSchedulerJob({
-    name: daily_mod_stats_update,
-    async onRun(_event, context) {
-        await updateFromQueue(context, 'Daily');
-    },
-});
-
-
 async function update(context: TriggerContext) {
     const oldJobId = await context.redis.get('jobId'); if (oldJobId) await context.scheduler.cancelJob(oldJobId);
     const jobId = await context.scheduler.runJob({ name: daily_mod_stats_update, cron: '1 0 * * *', data: {}, });
     await context.redis.set('jobId', jobId);
 }
 
-Devvit.addTrigger({
-    event: 'AppInstall',
-    async onEvent(_, context) {
-        await update(context);
-    },
-});
-
-Devvit.addTrigger({
-    event: 'AppUpgrade',
-    async onEvent(_, context) {
-        await update(context);
-    },
-});
+Devvit.addSchedulerJob({ name: daily_mod_stats_update, async onRun(_event, context) { await updateFromQueue(context, 'Daily'); }, });
+Devvit.addTrigger({ event: 'AppInstall', async onEvent(_, context) { await update(context); }, });
+Devvit.addTrigger({ event: 'AppUpgrade', async onEvent(_, context) { await update(context); }, });
 
 function datetime_local_toUTCString(datetime_local: Datetime_global | Date, timezone: string): string {
     return (new Datetime_global(datetime_local, timezone)).toString();
@@ -320,26 +301,24 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
     const breakdownPerMod = getSortedModBreakdown(ModActionEntries, sortedMods.map(s => s.name));
 
     // Generate wiki content
-    const wikiContent = generateWikiContent(
+    const timezone = options.timezone, wikiContent = generateWikiContent(
         updatedDatetime_global, sortedMods, top10Actions,
         top10ActionsNoAutoModSticky, totalActions,
         subredditName, {
         breakdownPerMod,
         breakdownEachMod,
         ModActionEntries,
-        timezone: options.timezone,
-    },
-    );
+        timezone,
+    });
 
     // Update the wiki page
     return await context.reddit.updateWikiPage({ subredditName, page: title, content: wikiContent, reason, });
 }
 
 function sumArray(self: number[]): number {
-    function sum(accumulator: number, currentValue: number): number {
+    const sum = function (accumulator: number, currentValue: number): number {
         return accumulator + currentValue;
-    }
-    return self.reduce(sum, 0);
+    }; return self.reduce(sum, 0);
 }
 
 function generateWikiContent(datetimeLocal: Datetime_global, mods: any, actions: any,
