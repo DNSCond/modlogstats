@@ -16,7 +16,20 @@ stats include "Most Active Moderators" with the actions they took and percentage
 "Top 10 Most Common Actions" to count which are the mosy common actions taken.
 and "Top 10 Actions (excluding AutoModerator stickies)" because automoderator's sticky cause a action.
 
+## Favicond_
+
+Reminder, entries starting with 'Favicond\_' are not found in the modlog and added by the developer.  
+[Send feedback about this](https://www.reddit.com/message/compose/?to=antboiy&subject=modlogstats+feedbnack)
+
 ## changelog
+
+###  0.2.5: minor changes
+
+- changes it so logs expire 25 days instead of 4
+- Modmails are now counted. only if a moderator sends a modmail that is.
+- Favicond\_ actions are actions woroth considering. like Modmail. Favicond\_ModMail is for initiators and Favicond\_ModMail\_Reply is for replies.
+- there now is more control over the output.
+- other internal changes that are probably not imporant.
 
 ###  0.2.3: minor changes (0.2.4: nothing)
 
@@ -73,6 +86,7 @@ Source: https://g.co/gemini/share/4c734776d334
 if your timezone is not present, search for your iana timezone on a search engine
 
 - UTC (Coordinated Universal Time - the base)
+- Europe/Amsterdam (CET/CEST - Netherlands)
 - Europe/London (GMT/BST - UK)
 - Europe/Paris (CET/CEST - France)
 - Europe/Berlin (CET/CEST - Germany)
