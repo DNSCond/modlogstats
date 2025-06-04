@@ -1,6 +1,6 @@
 // Visit developers.reddit.com/docs to learn Devvit!
 
-import { Devvit, JobContext, ModAction, TriggerContext, ModMailConversationState } from '@devvit/public-api';
+import { Devvit, JobContext, ModAction, TriggerContext, WikiPage } from '@devvit/public-api';
 import { Datetime_global } from 'datetime_global/Datetime_global.js';//, DurationToHumanString
 import { Temporal } from 'temporal-polyfill';
 import { v4 as uuidv4 } from 'uuid';
@@ -75,12 +75,12 @@ Devvit.addTrigger({
         await redis.expire(hashKey, Expire);
     },
 });
-async function userIsMod(username: string, context: TriggerContext): Promise<boolean> {
-    //https://github.com/fsvreddit/modmail-userinfo/blob/main/src/utility.ts
-    const subredditName = await context.reddit.getCurrentSubredditName();
-    const modList = await context.reddit.getModerators({ subredditName, username, }).all();
-    return modList.length > 0;
-}
+// async function userIsMod(username: string, context: TriggerContext): Promise<boolean> {
+//     //https://github.com/fsvreddit/modmail-userinfo/blob/main/src/utility.ts
+//     const subredditName = await context.reddit.getCurrentSubredditName();
+//     const modList = await context.reddit.getModerators({ subredditName, username, }).all();
+//     return modList.length > 0;
+// }
 Devvit.addTrigger({
     event: 'ModMail',
     async onEvent(event, context) {
@@ -98,7 +98,7 @@ Devvit.addTrigger({
         // nullish values compare to false. why not like this?
         if (Boolean(LastMessage.author?.isMod) && LastMessage.author?.name) {
             const moderatorUsername = LastMessage.author.name;
-            const date = new Date(event.createdAt ?? new Date), uuid = uuidv4(), type = 'Favicond_ModMail' + (convoLength > 1 ? '_Reply' : '');
+            const date = new Date(event.createdAt ?? new Date), uuid = uuidv4(), type = 'Favicond_Modmail' + (convoLength > 1 ? '_Reply' : '');
             const key = `modlog_${uuid}`, hashKey = `modlog:${(new Datetime_global(date)).format('Y-m-d')}`,
                 redis = context.redis, entry: ModActionEntry = { type, moderatorUsername, date };
             if (await context.settings.get('countModMail')) {
@@ -152,7 +152,7 @@ async function updateFromQueue(context: JobContext | Devvit.Context, $Daily: str
     if (enabled && $Daily === 'Daily') {
         await context.reddit.modMail.createModInboxConversation({
             subject: 'Daily Notification',
-            bodyMarkdown: wikipage.content,
+            bodyMarkdown: wikipage.contents.content,
             subredditId: context.subredditId,
         });
     }
@@ -183,9 +183,9 @@ Devvit.addMenuItem({
             }), context, 'modlog-stats', {
                 date: now, breakdownEachMod, timezone, debuglog,
                 reason: `manual update at ${datetime_local_toUTCString(now, 'UTC')}`,
-            });
+            }); const wikipage = page.wikipage;
             context.ui.showToast('Mod stats updated successfully!');
-            if (page !== undefined) context.ui.navigateTo(`https://www.reddit.com/r/${page.subredditName}/wiki/${page.name}/`);
+            if (wikipage !== undefined) context.ui.navigateTo(`https://www.reddit.com/r/${wikipage.subredditName}/wiki/${wikipage.name}/`);
         } catch (error) {
             console.error('Error updating mod stats:', error);
             context.ui.showToast('Failed to update mod stats. Check logs for details.');
@@ -330,7 +330,7 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
     context: Devvit.Context | JobContext, title: string, options: {
         date: Date, reason: string, breakdownEachMod: boolean,
         timezone: string, debuglog: boolean,
-    }) {
+    }): Promise<{ wikipage: WikiPage, contents: Record<string, string> }> {
     const updatedDate = new Date(options.date), reason = options.reason,
         updatedDatetime_global = new Datetime_global(updatedDate, 'UTC'),
         timezone = options.timezone;
@@ -349,7 +349,7 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
         let content = `# Moderator Activity Statistics\n\n*Last updated: ${datetime_local_toUTCString(updatedDatetime_global, timezone)}*`;
         content += `  \n[view your summery here](https://www.reddit.com/r/${subredditName}/wiki/modlog-stats/)  \n[Generated `;
         content += `By Moderator Statistics](https://developers.reddit.com/apps/modlogstats)  \nTotal Actions counted: 0`;
-        return await context.reddit.updateWikiPage({ subredditName, page, content, reason, });
+        return { wikipage: await context.reddit.updateWikiPage({ subredditName, page, content, reason, }), contents: { content } };
     }
 
     for (const action of ModActionEntries) {
@@ -412,20 +412,23 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
     const breakdownPerMod = getSortedModBreakdown(ModActionEntries, sortedMods.map(s => s.name));
 
     // Generate wiki content
-    const debuglog = options.debuglog,
-        wikiContent = generateWikiContent(
-            updatedDatetime_global, sortedMods, top10Actions,
-            top10ActionsNoAutoModSticky, totalActions,
-            subredditName, {
-            breakdownPerMod,
-            breakdownEachMod,
-            ModActionEntries,
-            timezone, debuglog,
-            automoderator_stickies,
-        });
+    const debuglog = options.debuglog, { content, content_debuglog } = generateWikiContent(
+        updatedDatetime_global, sortedMods, top10Actions,
+        top10ActionsNoAutoModSticky, totalActions,
+        subredditName, {
+        breakdownPerMod,
+        breakdownEachMod,
+        ModActionEntries,
+        timezone, debuglog,
+        automoderator_stickies,
+    });
 
     // Update the wiki page
-    return await context.reddit.updateWikiPage({ subredditName, page: title, content: wikiContent, reason, });
+    const wikipage = await context.reddit.updateWikiPage({
+        subredditName, page: title, reason,
+        content: content + content_debuglog
+    });
+    return { wikipage, contents: { content, content_debuglog } };
 }
 
 function sumArray(self: number[]): number {
@@ -501,15 +504,15 @@ function generateWikiContent(datetimeLocal: Datetime_global, mods: any, actions:
     content += `\nLatest-Action: ${Latest.type} <${username(Latest.moderatorUsername, true)}>`;
     content += ` (${Datetime_global(Latest.date, timezone)})  \nOldest-Action: ${Oldest.type}\n`;
     content += ` <${username(Oldest.moderatorUsername, true)}> (${Datetime_global(Oldest.date, timezone)})`;
-
+    let content_debuglog = '';
     if (options.debuglog) {
-        content += `\n## the debug Log\n\n| Action | ModeratorName | Date |\n|:-------|--------------:|-----:|\n`;
+        content_debuglog += `\n## the debug Log\n\n| Action | ModeratorName | Date |\n|:-------|--------------:|-----:|\n`;
         options.ModActionEntries.forEach(function (each: ModActionEntry) {
-            content += `| ${each.type} | ${username(each.moderatorUsername)} | ${Datetime_global(each.date, timezone)} |\n`;
+            content_debuglog += `| ${each.type} | ${username(each.moderatorUsername)} | ${Datetime_global(each.date, timezone)} |\n`;
         });
     }
 
-    return content;
+    return { content, content_debuglog };
 }
 
 export default Devvit;
