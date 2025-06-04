@@ -23,7 +23,7 @@ Reminder, entries starting with 'Favicond\_' are not found in the modlog and add
 
 ## changelog
 
-###  0.2.5: minor changes
+###  0.2.5: Favicond\_ changes
 
 - changes it so logs expire 25 days instead of 4
 - Modmails are now counted. only if a moderator sends a modmail that is.
