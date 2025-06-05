@@ -23,6 +23,12 @@ Reminder, entries starting with 'Favicond\_' are not found in the modlog and add
 
 ## changelog
 
+###  0.2.7: inline-Datetime_global
+
+- Most-Recent-Action: <0 seconds> gets added when 'per mod statistics?' is enabled for each mod.
+- the debuglog is now also in relative time.
+- other internal changes that are not important for users.
+
 ###  0.2.7: stoplog
 
 - the debug log does no longer get send as a modmail

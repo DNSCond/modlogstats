@@ -2,7 +2,10 @@
   "extends": "@devvit/public-api/devvit.tsconfig.json",
   "compilerOptions": {
     "lib": [
-      "es2024","dom"
-    ]
+      "es2024",
+      "dom"
+    ],
+    "allowImportingTsExtensions": true,
+    "noEmit": true
   }
 }
