@@ -23,7 +23,17 @@ Reminder, entries starting with 'Favicond\_' are not found in the modlog and add
 
 ## changelog
 
-###  0.2.7: inline-Datetime_global
+###  0.2.9: Favicond_Modmail_Incomming_Reply
+
+- updated and added
+  - `Favicond_Modmail_Incomming_Reply` and `Favicond_Modmail_Incomming_Initial`
+- some changes to the "all time" button
+- modmail from users should be registered as `Favicond_Modmail_Incomming_Initial` and replies as `Favicond_Modmail_Incomming_Reply`
+  under the name `[Favicond_anonymous]` (the brackets indicate that this is not a reddit username)
+- other internal changes that are probably not important for users.
+- added 'count Incomming Modmail from nonmods?' in the settings with the default to off
+
+###  0.2.8: inline-Datetime_global
 
 - Most-Recent-Action: <0 seconds> gets added when 'per mod statistics?' is enabled for each mod.
 - the debuglog is now also in relative time.

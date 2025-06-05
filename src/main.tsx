@@ -34,6 +34,13 @@ Devvit.addSettings([
                 helpText: 'if enabled will count the ModMail for only moderators',
                 defaultValue: true,
             },
+            {
+                type: 'boolean',
+                name: 'countIncommingModmail',
+                label: 'count Incomming Modmail from nonmods?',
+                helpText: 'if enabled will count the ModMail from non moderators',
+                defaultValue: false,
+            },
         ],
     },
     {
@@ -66,10 +73,10 @@ Devvit.addTrigger({
         const moderatorUsername = event?.moderator?.name; // Moderator username
         const date = new Date(event.actionedAt ?? new Date); // Date of action
         if (moderatorUsername === undefined) return;
-        const uuid = uuidv4();
+        const uuid = uuidv4(), utc = 'UTC';
 
         // Create a unique key for this modlog entry (e.g., using the mod action ID)
-        const key = `modlog_${uuid}`, hashKey = `modlog:${(new Datetime_global(date)).format('Y-m-d')}`,
+        const key = `modlog_${uuid}`, hashKey = `modlog:${(new Datetime_global(date, utc)).format('Y-m-d')}`,
             entry: ModActionEntry = { type, moderatorUsername, date };
 
         await redis.hSet(hashKey, { [key]: JSON.stringify(entry) });
@@ -92,20 +99,31 @@ Devvit.addTrigger({
         if (!conversationResponse.conversation) {
             return;
         }
+        if (!(await context.settings.get('countModMail'))) {
+            return;
+        }
         const messages = Object.values(conversationResponse.conversation.messages), LastMessage = messages.at(-1), convoLength = messages.length;
         // const conversationIsArchived = conversationResponse.conversation.state === ModMailConversationState.Archived;
         // console.log(jsonEncodeIndent({ messagesInConversation, conversationResponse, isMe }, 4));
         if (LastMessage === undefined) return;
+
+        const uuid = uuidv4(), key = `modlog_${uuid}`,
+            redis = context.redis, date = new Date(event.createdAt ?? new Date),
+            hashKey = `modlog:${(new Datetime_global(date, 'UTC')).format('Y-m-d')}`;
         // nullish values compare to false. why not like this?
         if (Boolean(LastMessage.author?.isMod) && LastMessage.author?.name) {
-            const moderatorUsername = LastMessage.author.name;
-            const date = new Date(event.createdAt ?? new Date), uuid = uuidv4(), type = 'Favicond_Modmail' + (convoLength > 1 ? '_Reply' : '');
-            const key = `modlog_${uuid}`, hashKey = `modlog:${(new Datetime_global(date)).format('Y-m-d')}`,
-                redis = context.redis, entry: ModActionEntry = { type, moderatorUsername, date };
-            if (await context.settings.get('countModMail')) {
-                await redis.hSet(hashKey, { [key]: JSON.stringify(entry) });
-                await redis.expire(hashKey, Expire);
-            }
+            const moderatorUsername = LastMessage.author.name,
+                type = 'Favicond_Modmail' + (convoLength > 1 ? '_Reply' : ''),
+                entry: ModActionEntry = { type, moderatorUsername, date };
+            await redis.hSet(hashKey, { [key]: JSON.stringify(entry) });
+            await redis.expire(hashKey, Expire);
+        } else if (await context.settings.get('countIncommingModmail')) {
+            const moderatorUsername = '[Favicond_anonymous]',
+                type = 'Favicond_Modmail_Incomming_' + (convoLength > 1 ? 'Reply' : 'Initial'),
+                entry: ModActionEntry = { type, moderatorUsername, date };
+
+            await redis.hSet(hashKey, { [key]: JSON.stringify(entry) });
+            await redis.expire(hashKey, Expire);
         }
     },
 });
@@ -129,7 +147,7 @@ function jsonEncodeIndent(jsonicItem: any, indent: boolean | number = true, repl
 }
 
 async function updateFromQueue(context: JobContext | Devvit.Context, $Daily: string) {
-    const timezone: string = await context.settings.get('Timezone') ?? 'UTC',
+    const timezone: string = await context.settings.get('Timezone') ?? 'UTC', utc = 'UTC',
         today_ = new Date, redis = context.redis, tomorrow = new Date(today_),
         subredditName: string = await context.reddit.getCurrentSubredditName(),
         today = new Datetime_global(today_.setUTCDate(today_.getUTCDate() - 1), 'UTC'),
@@ -212,16 +230,17 @@ Devvit.addMenuItem({
     location: 'subreddit',
     forUserType: 'moderator',
     async onPress(_event, context) {
+        const utc = 'UTC';
         const timezone: string = await context.settings.get('Timezone') ?? 'UTC',
-            today = (new Datetime_global).toTimezone(timezone), redis = context.redis,
+            today = (new Datetime_global).toTimezone(utc), redis = context.redis,
             subredditName: string = await context.reddit.getCurrentSubredditName(),
             breakdownEachMod: boolean = await context.settings.get('breakdown-each-mod') ?? false,
             debuglog: boolean = await context.settings.get('debuglog') ?? false;
 
         await updateModStats(subredditName, await (async function (): Promise<ModActionEntry[]> {
-            let items, time = (new Datetime_global(today, timezone)), letout = 0;
+            let items, time = (new Datetime_global(today, utc)), letout = 0;
             const promise: ModActionEntry[] = [];
-
+            time = addtoTime(time, 0, 0, 0, 0, +1);
             while (items = await redis.hGetAll('modlog:' + time.format('Y-m-d'))) {
                 time = addtoTime(time, 0, 0, 0, 0, -1);
                 for (const entry of Object.values(items)) {
@@ -229,7 +248,7 @@ Devvit.addMenuItem({
                     parsed['date'] = new Date(parsed['date']);
                     promise.push(parsed as ModActionEntry);
                 }
-                if ((++letout) > 250) break;
+                if ((++letout) > 25) break;
             }
             return promise;
         })(), context, 'modlog-stats', {
