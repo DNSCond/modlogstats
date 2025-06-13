@@ -23,6 +23,12 @@ Reminder, entries starting with 'Favicond\_' are not found in the modlog and add
 
 ## changelog
 
+###  0.2.10: Evaluate.User
+
+- after installing this update, mod actions with an affectedUser can now be queried per user.
+- when querying a user the result will be send as modmail.
+- this information will not be available in the regular reports
+
 ###  0.2.9: Favicond_Modmail_Incomming_Reply
 
 - updated and added
