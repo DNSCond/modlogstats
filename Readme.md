@@ -23,6 +23,10 @@ Reminder, entries starting with 'Favicond\_' are not found in the modlog and add
 
 ## changelog
 
+###  0.2.11: fixed header bug
+
+- fixed header bug
+
 ###  0.2.10: Evaluate.User
 
 - after installing this update, mod actions with an affectedUser can now be queried per user.

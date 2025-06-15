@@ -72,7 +72,7 @@ Devvit.addTrigger({
         const type = event.action ?? 'unknown'; // Type of moderator action
         const moderatorUsername = event?.moderator?.name; // Moderator username
         const date = new Date(event.actionedAt ?? new Date); // Date of action
-        const affectedUsername = event.targetUser?.name;
+        const affectedUsername = event.targetUser?.name ?? '[null]';
         if (moderatorUsername === undefined) return;
         const uuid = uuidv4(), utc = 'UTC';
 
@@ -541,7 +541,7 @@ function generateWikiContent(datetimeLocal: Datetime_global, mods: any, actions:
     content += `Reminder, entries starting with 'Favicond\\_' are not found in the modlog and added by the developer.`;
 
     // Most active moderators
-    content += `## Most Active Moderators\n\n`;
+    content += `\n\n## Most Active Moderators\n\n`;
     content += `| Moderator | Actions | Percentage |\n`;
     content += `|:----------|--------:|-----------:|\n`;
 
