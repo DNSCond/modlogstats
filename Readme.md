@@ -23,7 +23,11 @@ Reminder, entries starting with 'Favicond\_' are not found in the modlog and add
 
 ## changelog
 
-### 0.2.13: fixed bug
+### 0.2.14: fixed bug where the mod list is empty
+
+- fixed bug where the mod list is empty
+
+### 0.2.13: added proper feedback
 
 - logs expure at 90 days;
 - added proper feedback

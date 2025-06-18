@@ -499,7 +499,7 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
     }
 
     // Sort moderators by action count
-    const sortedMods: { name: string, count: number, percentage: string }[] = Object.entries(modCounts)
+    const sortedMods: { name: string, count: number, percentage: string }[] = [...modCounts.entries()]
         .sort((a, b) => b[1] - a[1])
         .map(([mod, count]) => ({
             name: mod, count,
