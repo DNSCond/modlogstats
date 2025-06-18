@@ -64,7 +64,7 @@ Devvit.addSettings([
 ]);
 const Expire = 86400 * 25;
 
-type ModActionEntry = { moderatorUsername: string, type: string, date: Date, affectedUsername?: string };
+type ModActionEntry = { moderatorUsername: string, type: string, date: Date, affectedUsername?: string | null };
 Devvit.addTrigger({
     event: 'ModAction', // Listen for modlog events
     async onEvent(event, { redis }) {
@@ -72,7 +72,8 @@ Devvit.addTrigger({
         const type = event.action ?? 'unknown'; // Type of moderator action
         const moderatorUsername = event?.moderator?.name; // Moderator username
         const date = new Date(event.actionedAt ?? new Date); // Date of action
-        const affectedUsername = event.targetUser?.name ?? '[null]';
+        const affectedUsername = event.targetUser?.name || null;
+
         if (moderatorUsername === undefined) return;
         const uuid = uuidv4(), utc = 'UTC';
 
@@ -84,12 +85,13 @@ Devvit.addTrigger({
         await redis.expire(hashKey, Expire);
     },
 });
+
 // async function userIsMod(username: string, context: TriggerContext): Promise<boolean> {
 //     //https://github.com/fsvreddit/modmail-userinfo/blob/main/src/utility.ts
 //     const subredditName = await context.reddit.getCurrentSubredditName();
-//     const modList = await context.reddit.getModerators({ subredditName, username, }).all();
-//     return modList.length > 0;
-// }
+// const modList = await context.reddit.getModerators({ subredditName,
+// username, }).all(); return modList.length > 0;}
+
 Devvit.addTrigger({
     event: 'ModMail',
     async onEvent(event, context) {
@@ -214,7 +216,7 @@ Devvit.addMenuItem({
 });
 
 Devvit.addMenuItem({
-    label: 'Update Mod Stats Now (debug)',
+    label: 'Update Mod Stats Now (immediately)',
     location: 'subreddit',
     forUserType: 'moderator',
     async onPress(_event, context) {
@@ -222,6 +224,39 @@ Devvit.addMenuItem({
             await updateFromQueue(context, 'Forced');
         } catch (e) {
             context.ui.showToast(String(e));
+        }
+    },
+});
+
+Devvit.addMenuItem({
+    label: 'generate debug log',
+    location: 'subreddit',
+    forUserType: 'moderator',
+    async onPress(_event, context) {
+        const reason = 'generated the debug log', subredditName = context.subredditName, utc = 'UTC';
+        const timezone: string = await context.settings.get('Timezone') ?? utc,
+            today = (new Datetime_global).toTimezone(utc), redis = context.redis;
+        if (subredditName) {
+            let content = (new Datetime_global(Date.now(), timezone)).toString() + '\n\n';
+
+            let items, time = (new Datetime_global(today, utc)), letout = 0;
+            const promise: ModActionEntry[] = [];
+            time = addtoTime(time, 0, 0, 0, 0, +1);
+            while (items = await redis.hGetAll('modlog:' + time.format('Y-m-d'))) {
+                time = addtoTime(time, 0, 0, 0, 0, -1);
+                for (const entry of Object.values(items)) {
+                    const parsed = JSON.parse(entry as string);
+                    parsed['date'] = new Date(parsed['date']);
+                    promise.push(parsed as ModActionEntry);
+                }
+                if ((++letout) > 90) break;
+            }
+
+            content += jsonEncodeIndent(promise, true);
+
+            await context.reddit.updateWikiPage({
+                content, subredditName, page: 'modlog-stats', reason,
+            });
         }
     },
 });
@@ -256,6 +291,7 @@ Devvit.addMenuItem({
             date: today.toDate(), breakdownEachMod, timezone, debuglog,
             reason: `allTime update at ${datetime_local_toUTCString(today, 'UTC')}`,
         });
+        context.ui.showToast('Mod stats updated successfully!');
     },
 });
 
@@ -269,7 +305,7 @@ const usernameForm = Devvit.createForm(
                 helpText: 'the user you want to evaluate. (without u/)'
             },
         ],
-        title: 'Username Form',
+        title: 'Evaluate User',
         acceptLabel: 'Submit',
     },
     async function (event, context) {
@@ -291,7 +327,7 @@ const usernameForm = Devvit.createForm(
                 if ((++letout) > 90) break;
             }
             return promise;
-        })(), username: string | undefined = event.values.username?.replace?.(/^u\//, '') ?? '[undefined]';
+        })(), username: string = event.values.username?.trim?.()?.replace?.(/^u\//, '') ?? '[undefined]';
         if (/^[a-zA-Z0-9\-_]+$/.test(username)) {
             const usernameFunction = function (string: string, linked: boolean = false): string {
                 return /^[a-zA-Z0-9\-_]+$/.test(string) ? (linked ? `[u/${string}](https://www.reddit.com/u/${string}/)` : ('u/' + string)) : string;
@@ -302,7 +338,7 @@ const usernameForm = Devvit.createForm(
             //bodyMarkdown += '|:-----------|------------:|-----:|\n';
             for (let modActionEntry of promise) {
                 if (typeof modActionEntry.affectedUsername === 'string') {
-                    if (modActionEntry.affectedUsername === username) {
+                    if (modActionEntry.affectedUsername.toLocaleLowerCase() === username.toLocaleLowerCase()) {
                         // const u = usernameFunction(modActionEntry.moderatorUsername), d = new Datetime_global(modActionEntry.date, timezone);
                         //bodyMarkdown += `| ${modActionEntry.type} | ${u} | ${d} |\n`;
                         index++;
@@ -393,22 +429,42 @@ function getSortedModBreakdown(
         .filter((x): x is ModBreakdown => x !== undefined);
 }
 
+class CounterMap<K> extends Map<K, any> {
+    increment(key: K, by: number): this {
+        return this.set(key, (this.get(key) ?? 0) + (+by));
+    }
+}
+
+class ArrayMap<K, V> extends Map<K, V[]> {
+    pushTo(key: K, value: V): this {
+        const array: V[] = this.get(key) ?? new Array;
+        array.push(value);
+        return this;
+    }
+
+    lengthOf(key: K): number {
+        return (this.get(key) ?? new Array).length;
+    }
+
+    mapArray(key: K, func: (each: any, index: number, unknownArray: V[]) => V[]): any[] {
+        return (this.get(key) ?? new Array).map(func, this);
+    }
+}
+
 const waterMark = '[Generated By Moderator Statistics](https://developers.reddit.com/apps/modlogstats)';
 async function updateModStats(subredditName: string, ModActionEntries: ModActionEntry[],
     context: Devvit.Context | JobContext, title: string, options: {
         date: Date, reason: string, breakdownEachMod: boolean,
         timezone: string, debuglog: boolean,
     }): Promise<{ wikipage: WikiPage, contents: { content: string, breakdownEachMod_content: string, content_debuglog: string } }> {
-    const updatedDate = new Date(options.date), reason = options.reason,
-        updatedDatetime_global = new Datetime_global(updatedDate, 'UTC'),
+    const updatedDate = new Date(options.date), reason = options.reason, updatedDatetime_global = new Datetime_global(updatedDate, 'UTC'),
         timezone = options.timezone;
-    // Get all mod actions from the log
 
     // Count actions by moderator and action type
-    const modCounts: { [moderator: string]: number } = {},
-        actionCounts: { [actionName: string]: number } = {},
-        lastModActionTaken: { [moderator: string]: Date } = {},
-        actionCountsNoAutoModSticky: { [actionName: string]: number } = {},
+    const modCounts: CounterMap<string> = new CounterMap,
+        actionCounts: CounterMap<string> = new CounterMap,
+        lastModActionTaken_ArrayMap: ArrayMap<string, Date> = new ArrayMap,
+        actionCountsNoAutoModSticky: CounterMap<string> = new CounterMap,
         breakdownEachMod: boolean = options.breakdownEachMod;
 
     let totalActions = 0, automoderator_stickies = 0;
@@ -421,35 +477,25 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
         return { wikipage: await context.reddit.updateWikiPage({ subredditName, page, content, reason, }), contents };
     }
 
+    const lastActionTaken: Date = ModActionEntries.map(m => m.date).sort((le: Date, ri: Date) => Number(ri) - Number(le))[0] ?? new Date;
     for (const action of ModActionEntries) {
-        if (action === undefined) continue;
         const when = action.date, modUsername = action.moderatorUsername, actionNameType = action.type;
         totalActions++;
 
         // Count by moderator
-        if (!modCounts[modUsername]) {
-            modCounts[modUsername] = 0;
-        }
-        modCounts[modUsername]++;
+        modCounts.increment(modUsername, 1);
 
         // Count by action type
-        if (!actionCounts[actionNameType]) {
-            actionCounts[actionNameType] = 0;
-        }
-        actionCounts[actionNameType]++;
+        actionCounts.increment(actionNameType, 1);
 
         // Count actions excluding AutoMod stickies
         if (actionNameType === 'sticky' && modUsername === 'AutoModerator') {
             automoderator_stickies += 1;
         } else {
-            if (!actionCountsNoAutoModSticky[actionNameType]) {
-                actionCountsNoAutoModSticky[actionNameType] = 0;
-            }
-            actionCountsNoAutoModSticky[actionNameType]++;
+            actionCountsNoAutoModSticky.increment(actionNameType, 1);
         }
-        const existingEntry = lastModActionTaken[modUsername] ?? 0;
 
-        lastModActionTaken[modUsername] = +existingEntry < +when ? when : new Date(existingEntry);
+        lastModActionTaken_ArrayMap.pushTo(modUsername, when);
     }
 
     // Sort moderators by action count
@@ -461,24 +507,19 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
         }));
 
     // Get top 10 actions
-    const top10Actions = Object.entries(actionCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
-        .map(([action, count]) => ({
-            name: action,
-            count,
-        }));
+    const top10Actions = [...actionCounts]
+        .sort((a, b) => b[1] - a[1]).slice(0, 10)
+        .map(([name, count]) => ({ name, count }));
 
     // Get top 10 actions without AutoMod stickies
-    const top10ActionsNoAutoModSticky = Object.entries(actionCountsNoAutoModSticky)
+    const top10ActionsNoAutoModSticky = [...actionCountsNoAutoModSticky]
         .sort((a, b) => b[1] - a[1])
         .slice(0, 10)
-        .map(([action, count]) => ({
-            name: action,
-            count,
-        }));
+        .map(([name, count]) => ({ name, count }));
 
     const breakdownPerMod = getSortedModBreakdown(ModActionEntries, sortedMods.map(s => s.name));
+
+    const lastModActionTaken: Map<string, Date> = new Map;
 
     // Generate wiki content
     const debuglog = options.debuglog, {
@@ -496,14 +537,14 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
         timezone, debuglog,
         automoderator_stickies,
         lastModActionTaken,
+        lastActionTaken,
     });
 
     let wikicontent = content + breakdownEachMod_content + content_debuglog;
 
-    // if (debuglog) {
-    //     const b64 = btoa(crossSiteLog);
-    //     wikicontent = wikicontent.replace(/https:\/\/ant\.ractoc\.com\/modlogstats\/#referer/, `https://ant.ractoc.com/modlogstats/?subredditName=${subredditName}#${b64}`);
-    // }
+    // if (debuglog) { const b64 = btoa(crossSiteLog);wikicontent = 
+    // wikicontent.replace(/https:\/\/ant\.ractoc\.com\/modlogstats\/#referer/
+    // , `https://ant.ractoc.com/modlogstats/?subredditName=${subredditName}#${b64}`); }
 
     // Update the wiki page
     const wikipage = await context.reddit.updateWikiPage({
@@ -528,7 +569,8 @@ function generateWikiContent(datetimeLocal: Datetime_global, mods: any, actions:
         breakdownPerMod: ModBreakdown[], breakdownEachMod: boolean,
         ModActionEntries: ModActionEntry[], timezone: string,
         debuglog: boolean, automoderator_stickies: number,
-        lastModActionTaken: { [moderator: string]: Date },
+        lastModActionTaken: Map<string, Date>,
+        lastActionTaken: Date,
     }) {
     const timezone = options.timezone, username = function (string: string, linked: boolean = false): string {
         return /^[a-zA-Z0-9\-_]+$/.test(string) ? (linked ? `[u/${string}](https://www.reddit.com/u/${string}/)` : ('u/' + string)) : string;
@@ -570,7 +612,7 @@ function generateWikiContent(datetimeLocal: Datetime_global, mods: any, actions:
         breakdownEachMod_content += `\n## Breakdown Per Mod\n`;
         options.breakdownPerMod.forEach(function (each: ModBreakdown) {
             breakdownEachMod_content += `\n### Breakdown For ${username(each.moderatorUsername)}\n`;
-            breakdownEachMod_content += `\nMost-Recent-Action: <${toHistoryString(options.lastModActionTaken[each.moderatorUsername], now, timezone)}>  \n`;
+            breakdownEachMod_content += `\nMost-Recent-Action: <${toHistoryString(options.lastModActionTaken.get(each.moderatorUsername)!, now, timezone)}>  \n`;
             breakdownEachMod_content += `Total-Actions: ${sumArray(each.actions.map(a => a.count))}\n\n`;
             breakdownEachMod_content += `| Action | Count |\n`;
             breakdownEachMod_content += `|:-------|------:|\n`;
@@ -581,10 +623,7 @@ function generateWikiContent(datetimeLocal: Datetime_global, mods: any, actions:
     }
 
     content += `\n## stats\n`;
-    const Latest = options.ModActionEntries.at(0)!, Oldest = options.ModActionEntries.at(-1)!;
-    content += `\nLatest-Action: ${Latest.type} <${username(Latest.moderatorUsername, true)}>`;
-    content += ` (${toHistoryString(Latest.date, now, timezone)})  \nOldest-Action: ${Oldest.type}\n`;
-    content += ` <${username(Oldest.moderatorUsername, true)}> (${toHistoryString(Oldest.date, now, timezone)})`;
+    content += `\nLatest-Action-At: <${datetime_local_toUTCString(options.lastActionTaken, timezone)}>`;
     let content_debuglog = '', crossSiteLog: string[] = [];
     if (options.debuglog) {
         content_debuglog += `\n## the debug Log\n\n| Action | ModeratorName | Date |\n|:-------|--------------:|-----:|\n`;

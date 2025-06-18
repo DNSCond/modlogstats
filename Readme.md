@@ -23,17 +23,22 @@ Reminder, entries starting with 'Favicond\_' are not found in the modlog and add
 
 ## changelog
 
-###  0.2.11: fixed header bug
+### 0.2.12: fixed bug
+
+- Evaulatae user now compares case insensitive.
+- "generate debug log" was added.
+
+### 0.2.11: fixed header bug
 
 - fixed header bug
 
-###  0.2.10: Evaluate.User
+### 0.2.10: Evaluate.User
 
 - after installing this update, mod actions with an affectedUser can now be queried per user.
 - when querying a user the result will be send as modmail.
 - this information will not be available in the regular reports
 
-###  0.2.9: Favicond_Modmail_Incomming_Reply
+### 0.2.9: Favicond_Modmail_Incomming_Reply
 
 - updated and added
   - `Favicond_Modmail_Incomming_Reply` and `Favicond_Modmail_Incomming_Initial`
@@ -43,22 +48,22 @@ Reminder, entries starting with 'Favicond\_' are not found in the modlog and add
 - other internal changes that are probably not important for users.
 - added 'count Incomming Modmail from nonmods?' in the settings with the default to off
 
-###  0.2.8: inline-Datetime_global
+### 0.2.8: inline-Datetime_global
 
 - Most-Recent-Action: <0 seconds> gets added when 'per mod statistics?' is enabled for each mod.
 - the debuglog is now also in relative time.
 - other internal changes that are not important for users.
 
-###  0.2.7: stoplog
+### 0.2.7: stoplog
 
 - the debug log does no longer get send as a modmail
 - changed `Favicond_ModMail` to `Favicond_Modmail`
 
-###  0.2.6: upadated readme
+### 0.2.6: upadated readme
 
 - upadated readme
 
-###  0.2.5: Favicond\_
+### 0.2.5: Favicond\_
 
 - changes it so logs expire 25 days instead of 4
 - Modmails are now counted. only if a moderator sends a modmail that is.
@@ -66,41 +71,41 @@ Reminder, entries starting with 'Favicond\_' are not found in the modlog and add
 - there now is more control over the output.
 - other internal changes that are probably not imporant.
 
-###  0.2.3: minor changes (0.2.4: nothing)
+### 0.2.3: minor changes (0.2.4: nothing)
 
 - changes it so logs expire 4 days instead of 2
 
-###  0.2.2
+### 0.2.2
 
 - added a list of common timezones at the bottom of this readme.
 - defaultValue: "UTC",
 
-###  0.2.1
+### 0.2.1
 
 - added an all time option (250 day in the past at most)
 - added a timezone option for those that want the bot to display in their timezone.
   (just search your iana timezone, should be somewhere)
 - other internal changes that are not imporant.
 
-###  0.2.0
+### 0.2.0
 
 - added 2 settings
   - 'per mod statistics?': if enabled it will breakdown each mod's actions.
   - 'Enable daily modmail notification': if enabled it will send a modmail with the breakdown.
 - other internal changes i cant remember so they probably not imporant
 
-###  0.1.4
+### 0.1.4
 
 - made it so it only uses `wiki/modlog-stats` for updates, beware.
 - updated action_reasons
 
-###  0.1.3
+### 0.1.3
 
 - changed so it reports daily
 - you now teleport when manually update it
 - other internal changes i cant remember so they probably not imporant
 
-###  0.1.1
+### 0.1.1
 
 - changed so it reports hourly, if a hour ever gets repeated then it is lost.
 - internally: changed so it saves to redis for longer savings
