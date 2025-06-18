@@ -23,6 +23,11 @@ Reminder, entries starting with 'Favicond\_' are not found in the modlog and add
 
 ## changelog
 
+### 0.2.13: fixed bug
+
+- logs expure at 90 days;
+- added proper feedback
+
 ### 0.2.12: fixed bug
 
 - Evaulatae user now compares case insensitive.

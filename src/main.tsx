@@ -62,7 +62,7 @@ Devvit.addSettings([
         helpText: 'if enabled then a minilog will be created on the bottom of the report',
     },
 ]);
-const Expire = 86400 * 25;
+const Expire = 86400 * 90;
 
 type ModActionEntry = { moderatorUsername: string, type: string, date: Date, affectedUsername?: string | null };
 Devvit.addTrigger({
@@ -222,6 +222,7 @@ Devvit.addMenuItem({
     async onPress(_event, context) {
         try {
             await updateFromQueue(context, 'Forced');
+            context.ui.showToast('Mod stats updated successfully!');
         } catch (e) {
             context.ui.showToast(String(e));
         }
@@ -233,14 +234,14 @@ Devvit.addMenuItem({
     location: 'subreddit',
     forUserType: 'moderator',
     async onPress(_event, context) {
-        const reason = 'generated the debug log', subredditName = context.subredditName, utc = 'UTC';
-        const timezone: string = await context.settings.get('Timezone') ?? utc,
-            today = (new Datetime_global).toTimezone(utc), redis = context.redis;
+        const utc = 'UTC', today = (new Datetime_global).toTimezone(utc),
+            reason = 'generated the debug log', subredditName = context.subredditName;
+        const timezone: string = await context.settings.get('Timezone') ?? utc;
         if (subredditName) {
             let content = (new Datetime_global(Date.now(), timezone)).toString() + '\n\n';
 
             let items, time = (new Datetime_global(today, utc)), letout = 0;
-            const promise: ModActionEntry[] = [];
+            const promise: ModActionEntry[] = [], redis = context.redis;
             time = addtoTime(time, 0, 0, 0, 0, +1);
             while (items = await redis.hGetAll('modlog:' + time.format('Y-m-d'))) {
                 time = addtoTime(time, 0, 0, 0, 0, -1);
@@ -251,12 +252,11 @@ Devvit.addMenuItem({
                 }
                 if ((++letout) > 90) break;
             }
-
-            content += jsonEncodeIndent(promise, true);
-
+            content += jsonEncodeIndent(promise, 2);
             await context.reddit.updateWikiPage({
                 content, subredditName, page: 'modlog-stats', reason,
             });
+            context.ui.showToast('log successfully dumped!');
         }
     },
 });
@@ -369,7 +369,7 @@ const usernameForm = Devvit.createForm(
     }
 );
 Devvit.addMenuItem({
-    label: 'Evaluate User',
+    label: 'Evaluate User modlog',
     location: 'subreddit',
     forUserType: 'moderator',
     async onPress(_event, context) {
