@@ -169,7 +169,7 @@ async function updateFromQueue(context: JobContext | Devvit.Context, $Daily: str
         const bodyMarkdown = wikipage.contents.content +
             wikipage.contents.breakdownEachMod_content,
             subredditId = context.subredditId;
-        await context.reddit.modMail.createModInboxConversation({
+        await context.reddit.modMail.createModNotification({
             subject: 'Daily Moderator Activity Statistics',
             bodyMarkdown, subredditId,
         });

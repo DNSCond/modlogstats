@@ -23,6 +23,10 @@ Reminder, entries starting with 'Favicond\_' are not found in the modlog and add
 
 ## changelog
 
+### 0.2.16: createModNotification
+
+- modmails should now be notifications
+
 ### 0.2.15: fixed bug where Most-Recent-Action: displayed <0 seconds>
 
 - fixed bug where Most-Recent-Action: displayed <0 seconds>
