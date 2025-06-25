@@ -23,6 +23,12 @@ Reminder, entries starting with 'Favicond\_' are not found in the modlog and add
 
 ## changelog
 
+### 0.2.17: Favicond_Modmail_Admin
+
+- the modmail system has been rewritten.
+- Favicond_Modmail_Admin is now used for accounts that reddit identifies as Admin
+- a modmail Statistics section is in the making
+
 ### 0.2.16: createModNotification
 
 - modmails should now be notifications

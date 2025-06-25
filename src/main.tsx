@@ -1,7 +1,7 @@
 // Visit developers.reddit.com/docs to learn Devvit!
 
 import { Devvit, JobContext, ModAction, TriggerContext, WikiPage } from '@devvit/public-api';
-// import { Datetime_global } from 'datetime_global/Datetime_global.js';
+import { ModMail } from "@devvit/protos";
 import { Temporal } from 'temporal-polyfill';
 import { Datetime_global } from 'datetime_global/Datetime_global.ts';
 import { v4 as uuidv4 } from 'uuid';
@@ -63,8 +63,8 @@ Devvit.addSettings([
     },
 ]);
 const Expire = 86400 * 90;
-
-type ModActionEntry = { moderatorUsername: string, type: string, date: Date, affectedUsername?: string | null };
+type incommingModMailEntry = { moderatorUsername: '[Favicond_anonymous]', mailerUsername: string, type: string, date: Date, affectedUsername?: null };
+type ModActionEntry = { moderatorUsername: string, type: string, date: Date, affectedUsername?: string | null } | incommingModMailEntry;
 Devvit.addTrigger({
     event: 'ModAction', // Listen for modlog events
     async onEvent(event, { redis }) {
@@ -88,40 +88,36 @@ Devvit.addTrigger({
 
 Devvit.addTrigger({
     event: 'ModMail',
-    async onEvent(event, context) {
+    async onEvent(event: ModMail, context: TriggerContext) {
         //const isMe = !event.messageAuthor || event.messageAuthor.name === context.appName;
         const conversationResponse = await context.reddit.modMail.getConversation({
             conversationId: event.conversationId,
-        });
-        if (!conversationResponse.conversation) {
-            return;
-        }
+        }), date = new Date(event.createdAt ?? new Date);
+        if (!conversationResponse.conversation) return;
         if (!(await context.settings.get('countModMail'))) {
             return;
         }
-        const messages = Object.values(conversationResponse.conversation.messages), LastMessage = messages.at(-1), convoLength = messages.length;
-        // const conversationIsArchived = conversationResponse.conversation.state === ModMailConversationState.Archived;
-        // console.log(jsonEncodeIndent({ messagesInConversation, conversationResponse, isMe }, 4));
-        if (LastMessage === undefined) return;
-
-        const uuid = uuidv4(), key = `modlog_${uuid}`,
-            redis = context.redis, date = new Date(event.createdAt ?? new Date),
+        if (!event.messageAuthor) return;
+        if (event.messageAuthor.name === context.appName) return;
+        // https://github.com/fsvreddit/automodmail/blob/ef5000946bc0b2d15a15772bb488f0f72e251d8f/src/autoresponder.ts#L97
+        const otherEndUser = conversationResponse.conversation.participant?.name, isModDiscussion = !otherEndUser,
+            messagesInConversation = Object.values(conversationResponse.conversation.messages);
+        const firstMessage = messagesInConversation[0]; if (!firstMessage.id) return;
+        const isFirstMessage = event.messageId.includes(firstMessage.id), moderatorUsername = '[Favicond_anonymous]';
+        const currentMessage = messagesInConversation.find(message => message.id && event.messageId.includes(message.id));
+        if (!currentMessage) return;
+        const isAdmin = Boolean(Object(currentMessage.author).isAdmin);
+        const isMod = Boolean(Object(currentMessage.author).isMod); //
+        const uuid = uuidv4(), key = `modlog_${uuid}`, redis = context.redis,
             hashKey = `modlog:${(new Datetime_global(date, 'UTC')).format('Y-m-d')}`;
-        // nullish values compare to false. why not like this?
-        if (Boolean(LastMessage.author?.isMod) && LastMessage.author?.name) {
-            const moderatorUsername = LastMessage.author.name,
-                type = 'Favicond_Modmail' + (convoLength > 1 ? '_Reply' : ''),
-                entry: ModActionEntry = { type, moderatorUsername, date };
-            await redis.hSet(hashKey, { [key]: JSON.stringify(entry) });
-            await redis.expire(hashKey, Expire);
-        } else if (await context.settings.get('countIncommingModmail')) {
-            const moderatorUsername = '[Favicond_anonymous]',
-                type = 'Favicond_Modmail_Incomming_' + (convoLength > 1 ? 'Reply' : 'Initial'),
-                entry: ModActionEntry = { type, moderatorUsername, date };
+        const mailerUsername = event.messageAuthor.name, type = (function (): string {
+            if (isMod) return ('Favicond_Modmail' + (isFirstMessage ? '_Reply' : ''));
+            else if (isAdmin) return 'Favicond_Modmail_Admin' + (isFirstMessage ? '_Reply' : '');
+            else return 'Favicond_Modmail_Incomming_' + (isFirstMessage ? 'Reply' : 'Initial');
+        })(), entry: incommingModMailEntry = { moderatorUsername, mailerUsername, date, type };
 
-            await redis.hSet(hashKey, { [key]: JSON.stringify(entry) });
-            await redis.expire(hashKey, Expire);
-        }
+        await redis.hSet(hashKey, { [key]: JSON.stringify(entry) });
+        await redis.expire(hashKey, Expire);
     },
 });
 
