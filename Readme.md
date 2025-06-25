@@ -23,6 +23,10 @@ Reminder, entries starting with 'Favicond\_' are not found in the modlog and add
 
 ## changelog
 
+### 0.2.18: fixed disrespect to setting
+
+- fixed disrespect to setting
+
 ### 0.2.17: Favicond_Modmail_Admin
 
 - the modmail system has been rewritten.

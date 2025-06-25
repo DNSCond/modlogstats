@@ -5,6 +5,7 @@ import { ModMail } from "@devvit/protos";
 import { Temporal } from 'temporal-polyfill';
 import { Datetime_global } from 'datetime_global/Datetime_global.ts';
 import { v4 as uuidv4 } from 'uuid';
+import { jsonEncodeIndent } from 'anthelpers';
 
 // Configure the app to use Reddit API
 Devvit.configure({ redditAPI: true, redis: true, });
@@ -98,7 +99,7 @@ Devvit.addTrigger({
             return;
         }
         if (!event.messageAuthor) return;
-        if (event.messageAuthor.name === context.appName) return;
+        // if (event.messageAuthor.name === context.appName) return;
         // https://github.com/fsvreddit/automodmail/blob/ef5000946bc0b2d15a15772bb488f0f72e251d8f/src/autoresponder.ts#L97
         const otherEndUser = conversationResponse.conversation.participant?.name, isModDiscussion = !otherEndUser,
             messagesInConversation = Object.values(conversationResponse.conversation.messages);
@@ -115,29 +116,13 @@ Devvit.addTrigger({
             else if (isAdmin) return 'Favicond_Modmail_Admin' + (isFirstMessage ? '_Reply' : '');
             else return 'Favicond_Modmail_Incomming_' + (isFirstMessage ? 'Reply' : 'Initial');
         })(), entry: incommingModMailEntry = { moderatorUsername, mailerUsername, date, type };
-
-        await redis.hSet(hashKey, { [key]: JSON.stringify(entry) });
-        await redis.expire(hashKey, Expire);
+        const honor: boolean = (await context.settings.get('countIncommingModmail')) ? true : (isMod || isAdmin);
+        if (honor) {
+            await redis.hSet(hashKey, { [key]: JSON.stringify(entry) });
+            await redis.expire(hashKey, Expire);
+        }
     },
 });
-
-function normalize_newlines(string: string) {
-    return String(string).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-}
-
-function indent_codeblock(string: string) {
-    return '    ' + normalize_newlines(string).replace(/\n/g, '\n    ');
-}
-
-function jsonEncode(jsonicItem: any, indent: boolean | number = false, replacer?: (this: any, key: string, value: any) => any): string {
-    if (indent === false) return JSON.stringify(jsonicItem, replacer);
-    else return JSON.stringify(jsonicItem, replacer, indent === true ? 4 : +indent);
-}
-
-function jsonEncodeIndent(jsonicItem: any, indent: boolean | number = true, replacer?: (this: any, key: string, value: any) => any): string {
-    if (indent === false) return indent_codeblock(JSON.stringify(jsonicItem, replacer));
-    else return indent_codeblock(JSON.stringify(jsonicItem, replacer, indent === true ? 4 : +indent));
-}
 
 async function updateFromQueue(context: JobContext | Devvit.Context, $Daily: string) {
     const timezone: string = await context.settings.get('Timezone') ?? 'UTC', utc = 'UTC',
