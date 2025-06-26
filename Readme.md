@@ -23,6 +23,18 @@ Reminder, entries starting with 'Favicond\_' are not found in the modlog and add
 
 ## changelog
 
+### 0.2.20: added modmail Statistics (part 2)
+
+- added `modmail-stats` as a wikipage.
+- \# Moderator Mail Activity Statistics
+- it showns  mailer, count, percentage, moderationStatus.
+- moderationStatus is oneOf `[A]` = reddit identified this as Admin; `[M]` = reddit identified this as Mod of this subreddit; `[U]` = any other user;
+- added some settings, specifically `modmail-stats`, `enabled?`.
+
+### 0.2.19: added modmail Statistics
+
+- see 0.2.20
+
 ### 0.2.18: fixed disrespect to setting
 
 - fixed disrespect to setting
