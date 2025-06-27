@@ -23,6 +23,15 @@ Reminder, entries starting with 'Favicond\_' are not found in the modlog and add
 
 ## changelog
 
+### 0.3.0: added a General Statistics section.
+
+> Latest-Action-At: <Fri Jun 27 2025 00:00:00 UTC+0000 (UTC)>  
+> Moderators removed `n` comments and `n` posts.Moderators approved `n` comments and `n` posts.  
+> That is a total of `n` comments actioned on and `n` posts.  
+> `nn.nn%` of the comments actioned on were removed. `nn.nn%` for posts
+>
+> Moderators banned `n` users. distinguished `n` posts or comments. stickied `n` of them.and `n` Moderators accepted an invite and `n` were Fired. and devvit apps changed `n` times.
+
 ### 0.2.20: added modmail Statistics (part 2)
 
 - added `modmail-stats` as a wikipage.
