@@ -23,6 +23,10 @@ Reminder, entries starting with 'Favicond\_' are not found in the modlog and add
 
 ## changelog
 
+### 0.3.1: fixed bug
+
+bug where it directed to modlog-stats instead modmail-stats
+
 ### 0.3.0: added a General Statistics section.
 
 > Latest-Action-At: <Fri Jun 27 2025 00:00:00 UTC+0000 (UTC)>  
