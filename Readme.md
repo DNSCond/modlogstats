@@ -21,6 +21,19 @@ and "Top 10 Actions (excluding AutoModerator stickies)" because automoderator's 
 Reminder, entries starting with 'Favicond\_' are not found in the modlog and added by the developer.  
 [Send feedback about this](https://www.reddit.com/message/compose/?to=antboiy&subject=modlogstats+feedbnack)
 
+## modlogstats is open for issues and pull requests
+
+([Devvit app page](https://developers.reddit.com/apps/modlogstats)) ([Github Repo](https://github.com/Qin2007/modlogstats))
+
+open an issue or [open a pull request](https://docs.github.com/en/get-started/exploring-projects-on-github/contributing-to-a-project)
+on github.
+
+### pull guidelines
+
+- use keyword functions instead of arrow functions.
+- keep your pull requests (PRs) small.
+- dont install any new depencendies (unless nessary).
+
 ## changelog
 
 ### 0.3.2: Timer Timee
