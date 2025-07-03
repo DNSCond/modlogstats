@@ -36,6 +36,12 @@ on github.
 
 ## changelog
 
+### 0.3.3: ModmailStats upgrade
+
+- the modmail stats will now display a log instead of a summery.
+- Teleport aldded to '`Update Mod Stats (all time)`'.
+- **better working for modmail events.**
+
 ### 0.3.2: Timer Timee
 
 - added a time option.

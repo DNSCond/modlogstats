@@ -86,7 +86,6 @@ Devvit.addSettings([
       },
     ],
   },
-
   {
     type: 'boolean',
     name: 'debuglog',
@@ -96,7 +95,7 @@ Devvit.addSettings([
 ]);
 const Expire = 86400 * 90;
 type incommingModMailEntry = {
-  moderatorUsername: '[Favicond_anonymous]',
+  moderatorUsername: string | '[Favicond_anonymous]',
   mailerUsername: string, affectedUsername?: null,
   isAdmin?: boolean, isMod?: boolean,
   type: string, date: Date,
@@ -126,39 +125,79 @@ Devvit.addTrigger({
 Devvit.addTrigger({
   event: 'ModMail',
   async onEvent(event: ModMail, context: TriggerContext) {
-    //const isMe = !event.messageAuthor || event.messageAuthor.name === context.appName;
+    // const isMe=!event.messageAuthor||event.messageAuthor.name===context.appName;
     const conversationResponse = await context.reddit.modMail.getConversation({
       conversationId: event.conversationId,
     }), date = new Date(event.createdAt ?? new Date);
     if (!conversationResponse.conversation) return;
-    if (!(await context.settings.get('countModMail'))) {
-      return;
-    }
-    if (!event.messageAuthor) return;
-    // if (event.messageAuthor.name === context.appName) return;
+    if (!(await context.settings.get('countModMail')))
+      return; if (!event.messageAuthor) return;
     // https://github.com/fsvreddit/automodmail/blob/ef5000946bc0b2d15a15772bb488f0f72e251d8f/src/autoresponder.ts#L97
-    const otherEndUser = conversationResponse.conversation.participant?.name, isModDiscussion = !otherEndUser,
-      messagesInConversation = Object.values(conversationResponse.conversation.messages);
+    // https://discord.com/channels/1050224141732687912/1050227353311248404/1390110420349620305
+    const messagesInConversation = Object.values(conversationResponse.conversation.messages);
     const firstMessage = messagesInConversation[0]; if (!firstMessage.id) return;
-    const isFirstMessage = event.messageId.includes(firstMessage.id), moderatorUsername = '[Favicond_anonymous]';
+    const isFirstMessage = event.messageId.includes(firstMessage.id);
     const currentMessage = messagesInConversation.find(message => message.id && event.messageId.includes(message.id));
-    if (!currentMessage) return;
+    if (!currentMessage) return; let moderatorUsername = '[Favicond_anonymous]';
     const isAdmin = Boolean(Object(currentMessage.author).isAdmin);
     const isMod = Boolean(Object(currentMessage.author).isMod); //
     const uuid = uuidv4(), key = `modlog_${uuid}`, redis = context.redis,
       hashKey = `modlog:${(new Datetime_global(date, 'UTC')).format('Y-m-d')}`;
-    const mailerUsername = event.messageAuthor.name, type = (function (): string {
-      if (isMod) return ('Favicond_Modmail' + (isFirstMessage ? '_Reply' : ''));
-      else if (isAdmin) return 'Favicond_Modmail_Admin' + (isFirstMessage ? '_Reply' : '');
-      else return 'Favicond_Modmail_Incomming_' + (isFirstMessage ? 'Reply' : 'Initial');
-    })(), entry: incommingModMailEntry = { moderatorUsername, mailerUsername, date, type, isAdmin, isMod };
-    const honor: boolean = (await context.settings.get('countIncommingModmail')) ? true : (isMod || isAdmin);
+    const specialStatus: boolean = (isMod || isAdmin);
+    const mailerUsername = event.conversationType === 'sr_sr' ?
+      (event.conversationSubreddit?.name?.replace(/^/, ''), 'r/') :
+      (specialStatus ? event.messageAuthor.name : '[Favicond_anonymous]'),
+      type = (function (): string {
+        if (isMod) return ('Favicond_Modmail' + (isFirstMessage ? '_Reply' : ''));
+        else if (isAdmin) return 'Favicond_Modmail_Admin' + (isFirstMessage ? '_Reply' : '');
+        else return 'Favicond_Modmail_Incomming_' + (isFirstMessage ? 'Reply' : 'Initial');
+      })(); if (isMod || isAdmin) moderatorUsername = event.messageAuthor.name;
+    const entry: incommingModMailEntry = { moderatorUsername, mailerUsername, date, type, isAdmin, isMod };
+    const honor: boolean = (await context.settings.get('countIncommingModmail')) ? true : specialStatus;
     if (honor) {
       await redis.hSet(hashKey, { [key]: JSON.stringify(entry) });
       await redis.expire(hashKey, Expire);
     }
   },
 });
+
+// Devvit.addTrigger({
+//   event: 'ModMail',
+//   async onEvent(event: ModMail, context: TriggerContext) {
+//     //const isMe = !event.messageAuthor || event.messageAuthor.name === context.appName;
+//     const conversationResponse = await context.reddit.modMail.getConversation({
+//       conversationId: event.conversationId,
+//     }), date = new Date(event.createdAt ?? new Date);
+//     if (!conversationResponse.conversation) return;
+//     if (!(await context.settings.get('countModMail'))) {
+//       return;
+//     } if (!event.messageAuthor) return;
+//     // if (event.messageAuthor.name === context.appName) return;
+//     // https://github.com/fsvreddit/automodmail/blob/ef5000946bc0b2d15a15772bb488f0f72e251d8f/src/autoresponder.ts#L97
+//     // https://discord.com/channels/1050224141732687912/1050227353311248404/1390110420349620305
+//     const //otherEndUser = conversationResponse.conversation.participant?.name, isModDiscussion = !otherEndUser,
+//       messagesInConversation = Object.values(conversationResponse.conversation.messages);
+//     const firstMessage = messagesInConversation[0]; if (!firstMessage.id) return;
+//     const isFirstMessage = event.messageId.includes(firstMessage.id);
+//     const currentMessage = messagesInConversation.find(message => message.id && event.messageId.includes(message.id));
+//     if (!currentMessage) return; let moderatorUsername = '[Favicond_anonymous]';
+//     const isAdmin = Boolean(Object(currentMessage.author).isAdmin);
+//     const isMod = Boolean(Object(currentMessage.author).isMod); //
+//     const uuid = uuidv4(), key = `modlog_${uuid}`, redis = context.redis,
+//       hashKey = `modlog:${(new Datetime_global(date, 'UTC')).format('Y-m-d')}`;
+//     const mailerUsername = event.messageAuthor.name, type = (function (): string {
+//       if (isMod) return ('Favicond_Modmail' + (isFirstMessage ? '_Reply' : ''));
+//       else if (isAdmin) return 'Favicond_Modmail_Admin' + (isFirstMessage ? '_Reply' : '');
+//       else return 'Favicond_Modmail_Incomming_' + (isFirstMessage ? 'Reply' : 'Initial');
+//     })(); if (isMod || isAdmin) moderatorUsername = mailerUsername;// console.log(jsonEncode(event, 2))
+//     const entry: incommingModMailEntry = { moderatorUsername, mailerUsername, date, type, isAdmin, isMod };
+//     const honor: boolean = (await context.settings.get('countIncommingModmail')) ? true : (isMod || isAdmin);
+//     if (honor) {
+//       await redis.hSet(hashKey, { [key]: JSON.stringify(entry) });
+//       await redis.expire(hashKey, Expire);
+//     }
+//   },
+// });
 
 async function updateFromQueue(context: JobContext | Devvit.Context, $Daily: string) {
   const timezone: string = await context.settings.get('Timezone') ?? 'UTC', utc = 'UTC',
@@ -305,6 +344,7 @@ Devvit.addMenuItem({
       reason: `allTime update at ${datetime_local_toUTCString(today, 'UTC')}`,
     });
     context.ui.showToast('Mod stats updated successfully!');
+    context.ui.navigateTo(`https://www.reddit.com/r/${subredditName}/wiki/modlog-stats/`);
   },
 });
 
@@ -315,7 +355,8 @@ const usernameForm = Devvit.createForm(
         type: 'string',
         name: 'username',
         label: 'Enter a username',
-        helpText: 'the user you want to evaluate. (without u/)'
+        helpText: 'the user you want to evaluate. (without u/)',
+        required: true,
       },
     ],
     title: 'Evaluate User',
@@ -340,27 +381,25 @@ const usernameForm = Devvit.createForm(
         if ((++letout) > 90) break;
       }
       return promise;
-    })(), username: string = event.values.username?.trim?.()?.replace?.(/^u\//, '') ?? '[undefined]';
+    })(), username: string = event.values.username.trim().replace(/^u\//, '') ?? '[undefined]';
     if (/^[a-zA-Z0-9\-_]+$/.test(username)) {
-      const usernameFunction = function (string: string, linked: boolean = false): string {
-        return /^[a-zA-Z0-9\-_]+$/.test(string) ? (linked ? `[u/${string}](https://www.reddit.com/u/${string}/)` : ('u/' + string)) : string;
-      }, actionCounts: { [actionName: string]: number } = {}, subredditName = context.subredditName;
-      let bodyMarkdown = `Evaluated u/${username}  \n`, index = 0;
+      const usernameFunction = usernameFormat, actionCounts: { [actionName: string]: number } = {};
+      let { subredditName } = context, bodyMarkdown = `Evaluated u/${username}  \n`, index = 0;
       bodyMarkdown += `Queried-By: <${usernameFunction(currentUsername, true)}>  \n${waterMark(subredditName)}  \n`;
-      //bodyMarkdown += '| actionName | byModerator | date |\n';
-      //bodyMarkdown += '|:-----------|------------:|-----:|\n';
+      bodyMarkdown += `Total-counted: ${index}  \nQueried-At: ${(new Datetime_global).toTimezone(timezone)}\n\n`;
+
       for (let modActionEntry of promise) {
         if (typeof modActionEntry.affectedUsername === 'string') {
           if (modActionEntry.affectedUsername.toLocaleLowerCase() === username.toLocaleLowerCase()) {
-            // const u = usernameFunction(modActionEntry.moderatorUsername), d = new Datetime_global(modActionEntry.date, timezone);
-            //bodyMarkdown += `| ${modActionEntry.type} | ${u} | ${d} |\n`;
             index++;
             if (actionCounts[modActionEntry.type] === undefined) { actionCounts[modActionEntry.type] = 0; }
             actionCounts[modActionEntry.type]++;
           }
         }
       }
-      bodyMarkdown += `Total-counted: ${index}  \nQueried-At: ${(new Datetime_global).toTimezone(timezone)}\n\n`;
+
+      // bodyMarkdown += `\n\n${quoteMarkdown(markdown_escape())}\n\n`;
+
       bodyMarkdown += '| actionName | count |\n';
       bodyMarkdown += '|:-----------|------:|\n';
       Object.entries(actionCounts).sort(function (a: [string, number], b: [string, number]): number {
@@ -393,7 +432,7 @@ Devvit.addMenuItem({
 });
 
 Devvit.addMenuItem({
-  label: 'Update Mod Mail Now',
+  label: 'Update Mod Mail Stats Now',
   description: 'the modmail stats',
   location: 'subreddit',
   forUserType: 'moderator',
@@ -531,15 +570,19 @@ async function updateMailStats(context: JobContext, forced: 'Daily' | 'Forced') 
     }));
   let content = `# Moderator Mail Activity Statistics\n\n*Last updated: ${datetime_local_toUTCString(today, timezone)}*  \n`;
   content += `${waterMark(subredditName)}  \nTotal modmails counted: ${totalActions}\n\n\`[A]\` = reddit identified this as Admin`;
-  content += `; \`[M]\` = reddit identified this as Mod of this subreddit; \`[U]\` = any other user; \`[S]\` = a subreddit;\n\n`;
-  content += `| mailer | count | percentage | moderationStatus |\n`;
-  content += `|:-------|------:|-----------:|-----------------:|\n`;
-  sortedMailers.forEach(function (sortedMailer: sortedMailers) {
-    let { isAdmin, isMod } = Object(adminMod.get(sortedMailer.name));
-    const moderationStatus = (isAdmin ? '[A]' : (isMod ? '[M]' : '[U]'));//.replace(/\[/, '\\[').replace(/]/, '\\]');
-    content += `| ${usernameFormat(sortedMailer.name)} | ${sortedMailer.count} | ${sortedMailer.percentage} | \`${moderationStatus}\` |\n`;
-  });
+  content += `; \`[M]\` = reddit identified this as Mod; \`[U]\` = any other user; \`[S]\` = a subreddit;\n\n`;
+  // content += `| mailer | count | percentage | moderationStatus |\n`;
+  // content += `|:-------|------:|-----------:|-----------------:|\n`;
+  // sortedMailers.forEach(function (sortedMailer: sortedMailers) {
+  //   let { isAdmin, isMod } = Object(adminMod.get(sortedMailer.name));
+  //   const moderationStatus = (isAdmin ? '[A]' : (isMod ? '[M]' : '[U]'));//.replace(/\[/, '\\[').replace(/]/, '\\]');
+  //content += `| ${usernameFormat(sortedMailer.name)} | ${sortedMailer.count} | ${sortedMailer.percentage} | \`${moderationStatus}\` |\n`;});
   const page = 'modmail-stats', reason = `${forced} update of the modmail-stats (${today})`;
+  
+  content += 'note: this area is work in progress, have a log for now.';
+
+  content += '\n\n| mailer | moderator username | moderationStatus | Date |\n|:-------|-------------------:|-----------------:|-----:|\n' + promise.map(
+    m => `| ${m.mailerUsername} | ${m.moderatorUsername} | ${(m.isAdmin ? '[A]' : (m.isMod ? '[M]' : '[U]'))} | ${m.date.toUTCString()} |`).join('\n');
   return await context.reddit.updateWikiPage({ content, subredditName, page, reason });
 }
 
