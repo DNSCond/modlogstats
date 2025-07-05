@@ -734,7 +734,7 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
   if (ModActionEntries.length === 0) {
     const page: string = title;
     let content = `# Moderator Activity Statistics\n\n*Last updated: ${datetime_local_toUTCString(updatedDatetime_global, timezone)}*`;
-    content += `${waterMark(subredditName)}  \nTotal Actions counted: 0`;
+    content += `  \n${waterMark(subredditName)}  \nTotal Actions counted: 0`;
     const contents = { content, breakdownEachMod_content: '', content_debuglog: '' };
     return { wikipage: await context.reddit.updateWikiPage({ subredditName, page, content, reason, }), contents };
   }
@@ -868,8 +868,8 @@ function generateWikiContent(datetimeLocal: Datetime_global,
     removemoderator: number,
   }): { content: string; breakdownEachMod_content: string; content_debuglog: string; crossSiteLog: string; } {
   const timezone = options.timezone, username = usernameFormat;
-  let content = `# Moderator Activity Statistics\n\n*Last updated: ${datetime_local_toUTCString(datetimeLocal, timezone)}*  \n`;
-  content += `${waterMark(subredditName)}  \nTotal Actions counted: ${totalActions}\n\n`;
+  let content = `# Moderator Activity Statistics\n\n*Last updated: ${datetime_local_toUTCString(datetimeLocal, timezone)}*`;
+  content += `  \n${waterMark(subredditName)}  \nTotal Actions counted: ${totalActions}\n\n`;
 
   // Reminder, Favicond_
   content += `Reminder, entries starting with 'Favicond\\_' are not found in the modlog and added by the developer.`;

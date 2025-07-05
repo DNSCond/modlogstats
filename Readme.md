@@ -36,6 +36,10 @@ on github.
 
 ## changelog
 
+### 0.3.4: \n\n
+
+- fixed some newline bugs
+
 ### 0.3.3: ModmailStats upgrade
 
 - the modmail stats will now display a log instead of a summery.
