@@ -2,8 +2,6 @@
 
 ever wanted to get competitive with your mod buddies?
 
-ever wanted to see some other insights than https://www.reddit.com/mod/vast_attention/insights ?
-
 ever wanted to see a breakdown of the moderator log?
 
 ## what this does
@@ -23,7 +21,7 @@ Reminder, entries starting with 'Favicond\_' are not found in the modlog and add
 
 ## modlogstats is open for issues and pull requests
 
-([Devvit app page](https://developers.reddit.com/apps/modlogstats)) ([Github Repo](https://github.com/Qin2007/modlogstats))
+([Devvit app page](https://developers.reddit.com/apps/modlogstats)) ([Github Repo](https://github.com/DNSCond/modlogstats))
 
 open an issue or [open a pull request](https://docs.github.com/en/get-started/exploring-projects-on-github/contributing-to-a-project)
 on github.
@@ -35,6 +33,13 @@ on github.
 - dont install any new depencendies (unless nessary).
 
 ## changelog
+
+### 0.3.4: \_Re0ly\_
+
+- fixed the bugs where `Favicond_Modmail` `Favicond_Modmail_reply`,
+ `Favicond_Modmail_Incomming_Reply` `Favicond_Modmail_Incomming_Initial`,
+ `Favicond_Modmail_Admin` `Favicond_Modmail_Admin_Reply`
+ were inverted.
 
 ### 0.3.4: \n\n
 

@@ -93,6 +93,7 @@ Devvit.addSettings([
     helpText: 'if enabled then a minilog will be created on the bottom of the report',
   },
 ]);
+
 const Expire = 86400 * 90;
 type incommingModMailEntry = {
   moderatorUsername: string | '[Favicond_anonymous]',
@@ -147,10 +148,10 @@ Devvit.addTrigger({
     const mailerUsername = event.conversationType === 'sr_sr' ?
       (event.conversationSubreddit?.name?.replace(/^/, ''), 'r/') :
       (specialStatus ? event.messageAuthor.name : '[Favicond_anonymous]'),
-      type = (function (): string {
-        if (isMod) return ('Favicond_Modmail' + (isFirstMessage ? '_Reply' : ''));
-        else if (isAdmin) return 'Favicond_Modmail_Admin' + (isFirstMessage ? '_Reply' : '');
-        else return 'Favicond_Modmail_Incomming_' + (isFirstMessage ? 'Reply' : 'Initial');
+      isReply = isFirstMessage!, type = (function (): string {
+        if (isMod) return ('Favicond_Modmail' + (isReply ? '_Reply' : ''));
+        else if (isAdmin) return 'Favicond_Modmail_Admin' + (isReply ? '_Reply' : '');
+        else return 'Favicond_Modmail_Incomming_' + (isReply ? 'Reply' : 'Initial');
       })(); if (isMod || isAdmin) moderatorUsername = event.messageAuthor.name;
     const entry: incommingModMailEntry = { moderatorUsername, mailerUsername, date, type, isAdmin, isMod };
     const honor: boolean = (await context.settings.get('countIncommingModmail')) ? true : specialStatus;
@@ -160,44 +161,6 @@ Devvit.addTrigger({
     }
   },
 });
-
-// Devvit.addTrigger({
-//   event: 'ModMail',
-//   async onEvent(event: ModMail, context: TriggerContext) {
-//     //const isMe = !event.messageAuthor || event.messageAuthor.name === context.appName;
-//     const conversationResponse = await context.reddit.modMail.getConversation({
-//       conversationId: event.conversationId,
-//     }), date = new Date(event.createdAt ?? new Date);
-//     if (!conversationResponse.conversation) return;
-//     if (!(await context.settings.get('countModMail'))) {
-//       return;
-//     } if (!event.messageAuthor) return;
-//     // if (event.messageAuthor.name === context.appName) return;
-//     // https://github.com/fsvreddit/automodmail/blob/ef5000946bc0b2d15a15772bb488f0f72e251d8f/src/autoresponder.ts#L97
-//     // https://discord.com/channels/1050224141732687912/1050227353311248404/1390110420349620305
-//     const //otherEndUser = conversationResponse.conversation.participant?.name, isModDiscussion = !otherEndUser,
-//       messagesInConversation = Object.values(conversationResponse.conversation.messages);
-//     const firstMessage = messagesInConversation[0]; if (!firstMessage.id) return;
-//     const isFirstMessage = event.messageId.includes(firstMessage.id);
-//     const currentMessage = messagesInConversation.find(message => message.id && event.messageId.includes(message.id));
-//     if (!currentMessage) return; let moderatorUsername = '[Favicond_anonymous]';
-//     const isAdmin = Boolean(Object(currentMessage.author).isAdmin);
-//     const isMod = Boolean(Object(currentMessage.author).isMod); //
-//     const uuid = uuidv4(), key = `modlog_${uuid}`, redis = context.redis,
-//       hashKey = `modlog:${(new Datetime_global(date, 'UTC')).format('Y-m-d')}`;
-//     const mailerUsername = event.messageAuthor.name, type = (function (): string {
-//       if (isMod) return ('Favicond_Modmail' + (isFirstMessage ? '_Reply' : ''));
-//       else if (isAdmin) return 'Favicond_Modmail_Admin' + (isFirstMessage ? '_Reply' : '');
-//       else return 'Favicond_Modmail_Incomming_' + (isFirstMessage ? 'Reply' : 'Initial');
-//     })(); if (isMod || isAdmin) moderatorUsername = mailerUsername;// console.log(jsonEncode(event, 2))
-//     const entry: incommingModMailEntry = { moderatorUsername, mailerUsername, date, type, isAdmin, isMod };
-//     const honor: boolean = (await context.settings.get('countIncommingModmail')) ? true : (isMod || isAdmin);
-//     if (honor) {
-//       await redis.hSet(hashKey, { [key]: JSON.stringify(entry) });
-//       await redis.expire(hashKey, Expire);
-//     }
-//   },
-// });
 
 async function updateFromQueue(context: JobContext | Devvit.Context, $Daily: string) {
   const timezone: string = await context.settings.get('Timezone') ?? 'UTC', utc = 'UTC',
@@ -578,7 +541,7 @@ async function updateMailStats(context: JobContext, forced: 'Daily' | 'Forced') 
   //   const moderationStatus = (isAdmin ? '[A]' : (isMod ? '[M]' : '[U]'));//.replace(/\[/, '\\[').replace(/]/, '\\]');
   //content += `| ${usernameFormat(sortedMailer.name)} | ${sortedMailer.count} | ${sortedMailer.percentage} | \`${moderationStatus}\` |\n`;});
   const page = 'modmail-stats', reason = `${forced} update of the modmail-stats (${today})`;
-  
+
   content += 'note: this area is work in progress, have a log for now.';
 
   content += '\n\n| mailer | moderator username | moderationStatus | Date |\n|:-------|-------------------:|-----------------:|-----:|\n' + promise.map(
