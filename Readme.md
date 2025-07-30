@@ -34,6 +34,14 @@ on github.
 
 ## changelog
 
+### 0.3.6: modmail logic update. (0.3.7: none)
+
+- some modmailstats logic updates
+
+### 0.3.5: unknown
+
+unknown
+
 ### 0.3.4: \_Re0ly\_
 
 - fixed the bugs where `Favicond_Modmail` `Favicond_Modmail_reply`,

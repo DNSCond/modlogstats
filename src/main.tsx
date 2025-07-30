@@ -6,8 +6,6 @@ import { Temporal } from 'temporal-polyfill';
 import { ModMail } from "@devvit/protos";
 import { v4 as uuidv4 } from 'uuid';
 
-"use strict";
-
 // Configure the app to use Reddit API
 Devvit.configure({ redditAPI: true, redis: true, });
 
@@ -24,19 +22,6 @@ Devvit.addSettings([
     label: 'per mod statistics?',
     helpText: 'if enabled will breakdown each mod\'s contributions to the modlog',
     defaultValue: true,
-  },
-  {
-    type: 'select',
-    name: 'modmailAt',
-    label: 'when to send the modmail?',
-    helpText: 'times are in utc, the app is in utc. these times are in utc. however you can determine when to send the info.',
-    options: [
-      { label: '06:01 UTC', value: '6', },
-      { label: '12:01 UTC', value: '12', },
-      { label: '17:01 UTC', value: '17', },
-      { label: '00:01 UTC', value: '0', },
-    ],
-    defaultValue: ['6'],
   },
   {
     type: 'group',
@@ -101,7 +86,9 @@ type incommingModMailEntry = {
   isAdmin?: boolean, isMod?: boolean,
   type: string, date: Date,
 };
-type ModActionEntry = { moderatorUsername: string, type: string, date: Date, affectedUsername?: string | null } | incommingModMailEntry;
+type ModActionEntry =
+  { moderatorUsername: string, type: string, date: Date, affectedUsername?: string | null }
+  | incommingModMailEntry;
 Devvit.addTrigger({
   event: 'ModAction', // Listen for modlog events
   async onEvent(event, { redis }) {
@@ -126,36 +113,51 @@ Devvit.addTrigger({
 Devvit.addTrigger({
   event: 'ModMail',
   async onEvent(event: ModMail, context: TriggerContext) {
-    // const isMe=!event.messageAuthor||event.messageAuthor.name===context.appName;
     const conversationResponse = await context.reddit.modMail.getConversation({
       conversationId: event.conversationId,
     }), date = new Date(event.createdAt ?? new Date);
     if (!conversationResponse.conversation) return;
     if (!(await context.settings.get('countModMail')))
-      return; if (!event.messageAuthor) return;
+      return;
+    if (!event.messageAuthor) return;
     // https://github.com/fsvreddit/automodmail/blob/ef5000946bc0b2d15a15772bb488f0f72e251d8f/src/autoresponder.ts#L97
     // https://discord.com/channels/1050224141732687912/1050227353311248404/1390110420349620305
     const messagesInConversation = Object.values(conversationResponse.conversation.messages);
-    const firstMessage = messagesInConversation[0]; if (!firstMessage.id) return;
+    const firstMessage = messagesInConversation[0];
+    if (!firstMessage.id) return;
     const isFirstMessage = event.messageId.includes(firstMessage.id);
     const currentMessage = messagesInConversation.find(message => message.id && event.messageId.includes(message.id));
-    if (!currentMessage) return; let moderatorUsername = '[Favicond_anonymous]';
-    const isAdmin = Boolean(Object(currentMessage.author).isAdmin);
-    const isMod = Boolean(Object(currentMessage.author).isMod); //
+    if (!currentMessage) return;
+    let moderatorUsername = '[Favicond_anonymous]';
+    const isMod = Boolean(Object(currentMessage.author).isMod),
+      isAdmin = Boolean(Object(currentMessage.author).isAdmin);
     const uuid = uuidv4(), key = `modlog_${uuid}`, redis = context.redis,
       hashKey = `modlog:${(new Datetime_global(date, 'UTC')).format('Y-m-d')}`;
-    const specialStatus: boolean = (isMod || isAdmin);
-    const mailerUsername = event.conversationType === 'sr_sr' ?
-      (event.conversationSubreddit?.name?.replace(/^/, ''), 'r/') :
-      (specialStatus ? event.messageAuthor.name : '[Favicond_anonymous]'),
-      isReply = isFirstMessage!, type = (function (): string {
-        if (isMod) return ('Favicond_Modmail' + (isReply ? '_Reply' : ''));
-        else if (isAdmin) return 'Favicond_Modmail_Admin' + (isReply ? '_Reply' : '');
-        else return 'Favicond_Modmail_Incomming_' + (isReply ? 'Reply' : 'Initial');
-      })(); if (isMod || isAdmin) moderatorUsername = event.messageAuthor.name;
+
+    const specialStatus: boolean = (isMod || isAdmin), isReply = !isFirstMessage!;
+
+    let mailerUsername: string;
+    switch (event.conversationType) {
+      case 'sr_sr': {
+        mailerUsername = event.conversationSubreddit?.name as string;
+        if (mailerUsername) mailerUsername = 'r/' + mailerUsername;
+        else throw new TypeError('mailerUsername is undefined');
+        break;
+      }
+      default: {
+        mailerUsername = specialStatus ? event.messageAuthor.name : '[Favicond_anonymous]'
+      }
+    }
+
+    const type = isMod ? `Favicond_Modmail${isReply ? '_Reply' : ''}`
+      : isAdmin ? `Favicond_Modmail_Admin${isReply ? '_Reply' : ''}` :
+        `Favicond_Modmail_Incomming_${isReply ? 'Reply' : 'Initial'}`;
+
+    if (isMod || isAdmin) moderatorUsername = event.messageAuthor.name;
     const entry: incommingModMailEntry = { moderatorUsername, mailerUsername, date, type, isAdmin, isMod };
-    const honor: boolean = (await context.settings.get('countIncommingModmail')) ? true : specialStatus;
-    if (honor) {
+    const shouldLogEntry: boolean = (await context.settings.get('countIncommingModmail')) ? true : specialStatus;
+    // save to the database
+    if (shouldLogEntry) {
       await redis.hSet(hashKey, { [key]: JSON.stringify(entry) });
       await redis.expire(hashKey, Expire);
     }
@@ -196,7 +198,8 @@ async function updateFromQueue(context: JobContext | Devvit.Context, $Daily: str
 }
 
 function addtoTime(Datetime_global: Datetime_global, hours: number = 0, minutes: number = 0, seconds: number = 0, month: number = 0, day: number = 0, year: number = 0) {
-  const dur = new Temporal.Duration(year, month, day, hours, minutes, seconds), zdt = Datetime_global.toTemporalZonedDateTime();
+  const dur = new Temporal.Duration(year, month, day, hours, minutes, seconds),
+    zdt = Datetime_global.toTemporalZonedDateTime();
   return new Datetime_global.constructor(zdt.add(dur), Datetime_global.getTimezoneId());
 }
 
@@ -221,7 +224,8 @@ Devvit.addMenuItem({
       }), context, 'modlog-stats', {
         date: now, breakdownEachMod, timezone, debuglog,
         reason: `manual update at ${datetime_local_toUTCString(now, 'UTC')}`,
-      }); const wikipage = page.wikipage;
+      });
+      const wikipage = page.wikipage;
       context.ui.showToast('Mod stats updated successfully!');
       if (wikipage !== undefined) context.ui.navigateTo(`https://www.reddit.com/r/${wikipage.subredditName}/wiki/${wikipage.name}/`);
     } catch (error) {
@@ -355,7 +359,9 @@ const usernameForm = Devvit.createForm(
         if (typeof modActionEntry.affectedUsername === 'string') {
           if (modActionEntry.affectedUsername.toLocaleLowerCase() === username.toLocaleLowerCase()) {
             index++;
-            if (actionCounts[modActionEntry.type] === undefined) { actionCounts[modActionEntry.type] = 0; }
+            if (actionCounts[modActionEntry.type] === undefined) {
+              actionCounts[modActionEntry.type] = 0;
+            }
             actionCounts[modActionEntry.type]++;
           }
         }
@@ -496,6 +502,7 @@ Devvit.addMenuItem({
 });
 
 type sortedMailers = { name: string, count: number, percentage: string };
+
 async function updateMailStats(context: JobContext, forced: 'Daily' | 'Forced') {
   const subredditName = context.subredditName;
   if (subredditName === undefined) return;
@@ -516,7 +523,8 @@ async function updateMailStats(context: JobContext, forced: 'Daily' | 'Forced') 
       if ((++letout) > 90) break;
     }
     return promise;
-  })(); let totalActions = 0;
+  })();
+  let totalActions = 0;
   const mostMailer = new CounterMap<string>, adminMod = new Map<string, { isAdmin: boolean, isMod: boolean }>();
   for (const element of promise) {
     mostMailer.increment(element.mailerUsername);
@@ -551,22 +559,48 @@ async function updateMailStats(context: JobContext, forced: 'Daily' | 'Forced') 
 
 const daily_mod_stats_update = 'daily-mod-stats-update';
 const daily_mail_stats_update = 'daily-mail-stats-update';
+
 async function update(context: TriggerContext) {
-  const hourTime = (await context.settings.get('modmailAt')) ?? '6';
+  const hourTime = '1';
   {
-    const oldJobId = await context.redis.get('jobId'); if (oldJobId) await context.scheduler.cancelJob(oldJobId);
-    const jobId = await context.scheduler.runJob({ name: daily_mod_stats_update, cron: `1 ${hourTime} * * *`, data: {}, });
+    const oldJobId = await context.redis.get('jobId');
+    if (oldJobId) await context.scheduler.cancelJob(oldJobId);
+    const jobId = await context.scheduler.runJob({
+      name: daily_mod_stats_update,
+      cron: `1 ${hourTime} * * *`,
+      data: {},
+    });
     await context.redis.set('jobId', jobId);
-  }; {
-    const oldJobId = await context.redis.get(`jobId-${daily_mail_stats_update}`); if (oldJobId) await context.scheduler.cancelJob(oldJobId);
-    const jobId = await context.scheduler.runJob({ name: daily_mail_stats_update, cron: `5 ${hourTime} * * *`, data: {}, });
+  }
+  ;
+  {
+    const oldJobId = await context.redis.get(`jobId-${daily_mail_stats_update}`);
+    if (oldJobId) await context.scheduler.cancelJob(oldJobId);
+    const jobId = await context.scheduler.runJob({
+      name: daily_mail_stats_update,
+      cron: `5 ${hourTime} * * *`,
+      data: {},
+    });
     await context.redis.set(`jobId-${daily_mail_stats_update}`, jobId);
-  };
+  }
+  ;
 }
 
-Devvit.addSchedulerJob({ name: daily_mod_stats_update, async onRun(_event, context) { await updateFromQueue(context, 'Daily'); }, });
-Devvit.addTrigger({ event: 'AppInstall', async onEvent(_, context) { await update(context); }, });
-Devvit.addTrigger({ event: 'AppUpgrade', async onEvent(_, context) { await update(context); }, });
+Devvit.addSchedulerJob({
+  name: daily_mod_stats_update, async onRun(_event, context) {
+    await updateFromQueue(context, 'Daily');
+  },
+});
+Devvit.addTrigger({
+  event: 'AppInstall', async onEvent(_, context) {
+    await update(context);
+  },
+});
+Devvit.addTrigger({
+  event: 'AppUpgrade', async onEvent(_, context) {
+    await update(context);
+  },
+});
 Devvit.addSchedulerJob({
   name: daily_mail_stats_update, async onRun(_event, context) {
     if (await context.settings.get('modmailStats')) {
@@ -642,7 +676,8 @@ class ArrayMap<K, V> extends Map<K, V[]> {
     const map = new Map<K, V>();
     for (const [key, value] of this) {
       map.set(key, value.reduce(func, initialValue));
-    } return map;
+    }
+    return map;
   }
 
   /*mapAll(func: (each: any, index: number, unknownArray: V[]) => V): Map<K, V[]>
@@ -675,15 +710,20 @@ function percentageForamt(Le: number, Ri: number): string {
   [Le, Ri] = [+Le, +Ri];
   const percentage = (Le / Ri) * 100;
   if (!Number.isFinite(percentage) || Number.isNaN(percentage))
-    return '0.00%'; return `${percentage.toFixed(2)}%`;
+    return '0.00%';
+  return `${percentage.toFixed(2)}%`;
 }
 
 async function updateModStats(subredditName: string, ModActionEntries: ModActionEntry[],
   context: Devvit.Context | JobContext, title: string, options: {
     date: Date, reason: string, breakdownEachMod: boolean,
     timezone: string, debuglog: boolean,
-  }): Promise<{ wikipage: WikiPage, contents: { content: string, breakdownEachMod_content: string, content_debuglog: string } }> {
-  const updatedDate = new Date(options.date), reason = options.reason, updatedDatetime_global = new Datetime_global(updatedDate, 'UTC'),
+  }): Promise<{
+    wikipage: WikiPage,
+    contents: { content: string, breakdownEachMod_content: string, content_debuglog: string }
+  }> {
+  const updatedDate = new Date(options.date), reason = options.reason,
+    updatedDatetime_global = new Datetime_global(updatedDate, 'UTC'),
     timezone = options.timezone;
 
   // Count actions by moderator and action type
@@ -726,16 +766,36 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
     }
 
     switch (actionNameType) {
-      case 'sticky': sticky++; break;
-      case 'banuser': banUser++; break;
-      case 'removelink': removePost++; break;
-      case 'distinguish': distinguish++; break;
-      case 'approvelink': approvePost++; break;
-      case 'removecomment': removeComment++; break;
-      case 'approvecomment': approveComment++; break;
-      case 'removemoderator': removemoderator++; break;
-      case 'acceptmoderatorinvite': acceptmoderatorinvite++; break;
-      case 'dev_platform_app_changed': dev_platform_app_changed++; break;
+      case 'sticky':
+        sticky++;
+        break;
+      case 'banuser':
+        banUser++;
+        break;
+      case 'removelink':
+        removePost++;
+        break;
+      case 'distinguish':
+        distinguish++;
+        break;
+      case 'approvelink':
+        approvePost++;
+        break;
+      case 'removecomment':
+        removeComment++;
+        break;
+      case 'approvecomment':
+        approveComment++;
+        break;
+      case 'removemoderator':
+        removemoderator++;
+        break;
+      case 'acceptmoderatorinvite':
+        acceptmoderatorinvite++;
+        break;
+      case 'dev_platform_app_changed':
+        dev_platform_app_changed++;
+        break;
       default:
     }
 
@@ -808,7 +868,8 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
 function sumArray(self: number[]): number {
   const sum = function (accumulator: number, currentValue: number): number {
     return accumulator + currentValue;
-  }; return self.reduce(sum, 0);
+  };
+  return self.reduce(sum, 0);
 }
 
 function usernameFormat(string: string, linked: boolean = false): string {
@@ -816,7 +877,10 @@ function usernameFormat(string: string, linked: boolean = false): string {
 }
 
 function generateWikiContent(datetimeLocal: Datetime_global,
-  mods: { name: string; count: any; percentage: any; }[], actions: { name: any; count: any; }[],
+  mods: { name: string; count: any; percentage: any; }[], actions: {
+    name: any;
+    count: any;
+  }[],
   actionsNoAutoMod: any, totalActions: number, subredditName: string, options: {
     breakdownPerMod: ModBreakdown[], breakdownEachMod: boolean,
     ModActionEntries: ModActionEntry[], timezone: string,
