@@ -165,7 +165,7 @@ Devvit.addTrigger({
 });
 
 async function updateFromQueue(context: JobContext | Devvit.Context, $Daily: string) {
-  const timezone: string = await context.settings.get('Timezone') ?? 'UTC', utc = 'UTC',
+  const timezone: string = await context.settings.get('Timezone') ?? 'UTC',
     today_ = new Date, redis = context.redis, tomorrow = new Date(today_),
     subredditName: string = await context.reddit.getCurrentSubredditName(),
     today = new Datetime_global(today_.setUTCDate(today_.getUTCDate() - 1), 'UTC'),
@@ -350,9 +350,9 @@ const usernameForm = Devvit.createForm(
       return promise;
     })(), username: string = event.values.username.trim().replace(/^u\//, '') ?? '[undefined]';
     if (/^[a-zA-Z0-9\-_]+$/.test(username)) {
-      const usernameFunction = usernameFormat, actionCounts: { [actionName: string]: number } = {};
-      let { subredditName } = context, bodyMarkdown = `Evaluated u/${username}  \n`, index = 0;
-      bodyMarkdown += `Queried-By: <${usernameFunction(currentUsername, true)}>  \n${waterMark(subredditName)}  \n`;
+      const actionCounts: { [actionName: string]: number } = {}, actionLog: { actionName: string, when: Date }[] = [];
+      let { subredditName } = context, bodyMarkdown = `# Evaluated u/${username}  \n\n`, index = 0;
+      bodyMarkdown += `Queried-By: <${usernameFormat(currentUsername, true)}>  \n${waterMark(subredditName)}  \n`;
       bodyMarkdown += `Total-counted: ${index}  \nQueried-At: ${(new Datetime_global).toTimezone(timezone)}\n\n`;
 
       for (let modActionEntry of promise) {
@@ -363,6 +363,7 @@ const usernameForm = Devvit.createForm(
               actionCounts[modActionEntry.type] = 0;
             }
             actionCounts[modActionEntry.type]++;
+            actionLog.push({ actionName: modActionEntry.type, when: modActionEntry.date });
           }
         }
       }
@@ -376,6 +377,12 @@ const usernameForm = Devvit.createForm(
       }).forEach(function (entry: [string, number]) {
         bodyMarkdown += `| ${entry[0]} | ${entry[1]} |\n`;
       });
+
+      bodyMarkdown += '\n## actionlog';
+      bodyMarkdown += '\n| actionName | Date |\n|:-----------|-----:|\n';
+      bodyMarkdown += '\n' + actionLog.sort(function (le: { when: Date }, ri: { when: Date }): number {
+        return +ri - +le;
+      }).map(m => `| ${m.actionName} | ${Datetime_global(m.when, timezone)} |`);
 
       await context.reddit.modMail.createModInboxConversation({
         subject: `modlog Evaluation For u/${username}`, bodyMarkdown,
@@ -501,7 +508,7 @@ Devvit.addMenuItem({
   },
 });
 
-type sortedMailers = { name: string, count: number, percentage: string };
+// type sortedMailers = { name: string, count: number, percentage: string };
 
 async function updateMailStats(context: JobContext, forced: 'Daily' | 'Forced') {
   const subredditName = context.subredditName;
@@ -534,11 +541,11 @@ async function updateMailStats(context: JobContext, forced: 'Daily' | 'Forced') 
     isMod = Boolean(element.isMod) || isMod;
     adminMod.set(element.mailerUsername, { isAdmin, isMod });
   }
-  const sortedMailers: sortedMailers[] = [...mostMailer.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([name, count]) => ({
-      name, count, percentage: percentageForamt(count, totalActions),
-    }));
+  // const sortedMailers: sortedMailers[] = [...mostMailer.entries()]
+  //   .sort((a, b) => b[1] - a[1])
+  //   .map(([name, count]) => ({
+  //     name, count, percentage: percentageForamt(count, totalActions),
+  //   }));
   let content = `# Moderator Mail Activity Statistics\n\n*Last updated: ${datetime_local_toUTCString(today, timezone)}*  \n`;
   content += `${waterMark(subredditName)}  \nTotal modmails counted: ${totalActions}\n\n\`[A]\` = reddit identified this as Admin`;
   content += `; \`[M]\` = reddit identified this as Mod; \`[U]\` = any other user; \`[S]\` = a subreddit;\n\n`;
@@ -561,7 +568,7 @@ const daily_mod_stats_update = 'daily-mod-stats-update';
 const daily_mail_stats_update = 'daily-mail-stats-update';
 
 async function update(context: TriggerContext) {
-  const hourTime = '1';
+  const hourTime = '0';
   {
     const oldJobId = await context.redis.get('jobId');
     if (oldJobId) await context.scheduler.cancelJob(oldJobId);
@@ -586,21 +593,9 @@ async function update(context: TriggerContext) {
   ;
 }
 
-Devvit.addSchedulerJob({
-  name: daily_mod_stats_update, async onRun(_event, context) {
-    await updateFromQueue(context, 'Daily');
-  },
-});
-Devvit.addTrigger({
-  event: 'AppInstall', async onEvent(_, context) {
-    await update(context);
-  },
-});
-Devvit.addTrigger({
-  event: 'AppUpgrade', async onEvent(_, context) {
-    await update(context);
-  },
-});
+Devvit.addSchedulerJob({ name: daily_mod_stats_update, async onRun(_event, context) { await updateFromQueue(context, 'Daily'); }, });
+Devvit.addTrigger({ event: 'AppInstall', async onEvent(_, context) { await update(context); }, });
+Devvit.addTrigger({ event: 'AppUpgrade', async onEvent(_, context) { await update(context); }, });
 Devvit.addSchedulerJob({
   name: daily_mail_stats_update, async onRun(_event, context) {
     if (await context.settings.get('modmailStats')) {
@@ -656,55 +651,47 @@ class CounterMap<K> extends Map<K, number> {
   }
 }
 
-class ArrayMap<K, V> extends Map<K, V[]> {
-  pushTo(key: K, value: V): this {
-    const array: V[] = this.get(key) ?? new Array;
-    array.push(value);
-    return this;
-  }
-
-  lengthOf(key: K): number {
-    return (this.get(key) ?? new Array).length;
-  }
-
-  mapArray(key: K, func: (each: any, index: number, unknownArray: V[]) => V[]): any[] {
-    return (this.get(key) ?? new Array).map(func, this);
-  }
-
-  reduceAll(func: (accumulator: any, currentValue: any, currentIndex: number, array: unknown[]) => any, initialValue: any): Map<K, V> {
-    // accumulator, currentValue, currentIndex, array), initialValue
-    const map = new Map<K, V>();
-    for (const [key, value] of this) {
-      map.set(key, value.reduce(func, initialValue));
-    }
-    return map;
-  }
-
-  /*mapAll(func: (each: any, index: number, unknownArray: V[]) => V): Map<K, V[]>
-  {const map = new Map<K, V[]>; for (const [key, value] of this)
-  {map.set(key, value.map(func)); } return map; }*/
-}
-
-function mapToJson(map: Map<string | symbol, any>) {
-  const obj: { [key: string]: any } = {};
-
-  for (const [key, value] of map) {
-    // Include only string keys and explicitly exclude '__proto__'
-    if (typeof key === 'string' && key !== '__proto__') {
-      obj[key] = value;
-    }
-  }
-
-  return obj;
-}
-
-function mapMapValues<K, V>(map: Map<K, V>, func: (each: V, key: K, unknownArray: Map<K, V>) => V) {
-  const result = new Map<K, V>();
-  for (const [key, value] of map.entries()) {
-    result.set(key, func(value, key, map));
-  }
-  return result;
-}
+// class ArrayMap<K, V> extends Map<K, V[]> {
+//   pushTo(key: K, value: V): this {
+//     const array: V[] = this.get(key) ?? new Array;
+//     array.push(value);
+//     return this;
+//   }
+//   lengthOf(key: K): number {
+//     return (this.get(key) ?? new Array).length;
+//   }
+//   mapArray(key: K, func: (each: any, index: number, unknownArray: V[]) => V[]): any[] {
+//     return (this.get(key) ?? new Array).map(func, this);
+//   }
+//   reduceAll(func: (accumulator: any, currentValue: any, currentIndex: number, array: unknown[]) => any, initialValue: any): Map<K, V> {
+//     // accumulator, currentValue, currentIndex, array), initialValue
+//     const map = new Map<K, V>();
+//     for (const [key, value] of this) {
+//       map.set(key, value.reduce(func, initialValue));
+//     }
+//     return map;
+//   }
+//   /*mapAll(func: (each: any, index: number, unknownArray: V[]) => V): Map<K, V[]>
+//   {const map = new Map<K, V[]>; for (const [key, value] of this)
+//   {map.set(key, value.map(func)); } return map; }*/
+// }
+// function mapToJson(map: Map<string | symbol, any>) {
+//   const obj: { [key: string]: any } = {};
+//   for (const [key, value] of map) {
+//     // Include only string keys and explicitly exclude '__proto__'
+//     if (typeof key === 'string' && key !== '__proto__') {
+//       obj[key] = value;
+//     }
+//   }
+//   return obj;
+// }
+// function mapMapValues<K, V>(map: Map<K, V>, func: (each: V, key: K, unknownArray: Map<K, V>) => V) {
+//   const result = new Map<K, V>();
+//   for (const [key, value] of map.entries()) {
+//     result.set(key, func(value, key, map));
+//   }
+//   return result;
+// }
 
 function percentageForamt(Le: number, Ri: number): string {
   [Le, Ri] = [+Le, +Ri];
@@ -766,37 +753,17 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
     }
 
     switch (actionNameType) {
-      case 'sticky':
-        sticky++;
-        break;
-      case 'banuser':
-        banUser++;
-        break;
-      case 'removelink':
-        removePost++;
-        break;
-      case 'distinguish':
-        distinguish++;
-        break;
-      case 'approvelink':
-        approvePost++;
-        break;
-      case 'removecomment':
-        removeComment++;
-        break;
-      case 'approvecomment':
-        approveComment++;
-        break;
-      case 'removemoderator':
-        removemoderator++;
-        break;
-      case 'acceptmoderatorinvite':
-        acceptmoderatorinvite++;
-        break;
-      case 'dev_platform_app_changed':
-        dev_platform_app_changed++;
-        break;
-      default:
+      case 'sticky': sticky++; break;
+      case 'banuser': banUser++; break;
+      case 'removelink': removePost++; break;
+      case 'distinguish': distinguish++; break;
+      case 'approvelink': approvePost++; break;
+      case 'removecomment': removeComment++; break;
+      case 'approvecomment': approveComment++; break;
+      case 'removemoderator': removemoderator++; break;
+      case 'acceptmoderatorinvite': acceptmoderatorinvite++; break;
+      case 'dev_platform_app_changed': dev_platform_app_changed++;
+        break; default:
     }
 
     const existingActionDate = lastModActionTaken.get(action.moderatorUsername);
@@ -877,10 +844,7 @@ function usernameFormat(string: string, linked: boolean = false): string {
 }
 
 function generateWikiContent(datetimeLocal: Datetime_global,
-  mods: { name: string; count: any; percentage: any; }[], actions: {
-    name: any;
-    count: any;
-  }[],
+  mods: { name: string; count: any; percentage: any; }[], actions: { name: any; count: any; }[],
   actionsNoAutoMod: any, totalActions: number, subredditName: string, options: {
     breakdownPerMod: ModBreakdown[], breakdownEachMod: boolean,
     ModActionEntries: ModActionEntry[], timezone: string,
@@ -894,8 +858,7 @@ function generateWikiContent(datetimeLocal: Datetime_global,
     acceptmoderatorinvite: number,
     removemoderator: number,
   }): { content: string; breakdownEachMod_content: string; content_debuglog: string; crossSiteLog: string; } {
-  const timezone = options.timezone, username = usernameFormat;
-  let content = `# Moderator Activity Statistics\n\n*Last updated: ${datetime_local_toUTCString(datetimeLocal, timezone)}*`;
+  let { timezone } = options, content = `# Moderator Activity Statistics\n\n*Last updated: ${datetime_local_toUTCString(datetimeLocal, timezone)}*`;
   content += `  \n${waterMark(subredditName)}  \nTotal Actions counted: ${totalActions}\n\n`;
 
   // Reminder, Favicond_
@@ -920,13 +883,13 @@ function generateWikiContent(datetimeLocal: Datetime_global,
   content += `|:----------|--------:|-----------:|\n`;
 
   // mods.forEach(function (mod: any) { content += `| ${username(mod.name)} | \`${mod.count}\` | \`${mod.percentage}\` |\n`;});
-  content += mods.map(mod => `| ${username(mod.name)} | \`${mod.count}\` | \`${mod.percentage}\` |\n`).join('');
+  content += mods.map(mod => `| ${usernameFormat(mod.name)} | ${mod.count} | ${mod.percentage} |\n`).join('');
 
   // Top 10 actions
   content += `\n## Top 10 Most Common Actions\n\n`;
   content += `| Action | Count |\n|:-------|------:|\n`;
 
-  content += actions.map(action => `| ${action.name} | \`${action.count}\` |\n`).join('');
+  content += actions.map(action => `| ${action.name} | ${action.count} |\n`).join('');
 
   // Top 10 actions without AutoMod stickies
   content += `\n## Top 10 Actions (excluding AutoModerator stickies)\n\nAutomoderator`;
@@ -940,8 +903,8 @@ function generateWikiContent(datetimeLocal: Datetime_global,
   if (options.breakdownEachMod) {
     breakdownEachMod_content += `\n## Breakdown Per Mod\n`;
     options.breakdownPerMod.forEach(function (each: ModBreakdown) {
-      breakdownEachMod_content += `\n### Breakdown For ${username(each.moderatorUsername)}\n`;
-      breakdownEachMod_content += `\nMost-Recent-Action: <${Datetime_global(options.lastModActionTaken.get(each.moderatorUsername)!, timezone)}>  \n`;
+      breakdownEachMod_content += `\n### Breakdown For ${usernameFormat(each.moderatorUsername)}\n`;
+      breakdownEachMod_content += `\nMost-Recent-Action: ${Datetime_global(options.lastModActionTaken.get(each.moderatorUsername)!, timezone)}  \n`;
       breakdownEachMod_content += `Total-Actions: ${sumArray(each.actions.map(a => a.count))}\n\n`;
       breakdownEachMod_content += `| Action | Count |\n`;
       breakdownEachMod_content += `|:-------|------:|\n`;
@@ -955,7 +918,7 @@ function generateWikiContent(datetimeLocal: Datetime_global,
   if (options.debuglog) {
     content_debuglog += `\n## the debug Log\n\n| Action | ModeratorName | Date |\n|:-------|--------------:|-----:|\n`;
     options.ModActionEntries.forEach(function (each: ModActionEntry) {// ago (${Datetime_global(each.date, timezone)})
-      content_debuglog += `| ${each.type} | ${username(each.moderatorUsername)} | ${Datetime_global(each.date, timezone)} |\n`;
+      content_debuglog += `| ${each.type} | ${usernameFormat(each.moderatorUsername)} | ${Datetime_global(each.date, timezone)} |\n`;
       (crossSiteLog as [string, string, string][]).push([each.type, each.moderatorUsername, each.date.toISOString()]);
     });
   }

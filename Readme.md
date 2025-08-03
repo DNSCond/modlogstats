@@ -28,11 +28,17 @@ on github.
 
 ### pull guidelines
 
-- use keyword functions instead of arrow functions.
 - keep your pull requests (PRs) small.
-- dont install any new depencendies (unless nessary).
+- use keyword functions instead of arrow functions, unless they are one operation functions like (m => m.toLowerString()).
+- dont install any new depencendies (unless nessesary).
+- other internal changes that are probably not imporant.
 
 ## changelog
+
+### 0.3.8: minilog for specifci users.
+
+- added a minilog for specific users.
+- went to hour 0 instead of hour 1 utc.
 
 ### 0.3.6: modmail logic update. (0.3.7: none)
 
@@ -110,12 +116,12 @@ and `n` Moderators accepted an invite and `n` were Fired. and devvit apps change
 
 ### 0.2.14: fixed bug where the mod list is empty
 
-- fixed bug where the mod list is empty
+- fixed bug where the mod list is empty.
 
 ### 0.2.13: added proper feedback
 
 - logs expure at 90 days;
-- added proper feedback
+- added proper feedback.
 
 ### 0.2.12: fixed bug
 
@@ -124,13 +130,13 @@ and `n` Moderators accepted an invite and `n` were Fired. and devvit apps change
 
 ### 0.2.11: fixed header bug
 
-- fixed header bug
+- fixed header bug.
 
 ### 0.2.10: Evaluate.User
 
 - after installing this update, mod actions with an affectedUser can now be queried per user.
 - when querying a user the result will be send as modmail.
-- this information will not be available in the regular reports
+- this information will not be available in the regular reports.
 
 ### 0.2.9: Favicond_Modmail_Incomming_Reply
 
@@ -140,7 +146,7 @@ and `n` Moderators accepted an invite and `n` were Fired. and devvit apps change
 - modmail from users should be registered as `Favicond_Modmail_Incomming_Initial` and replies as `Favicond_Modmail_Incomming_Reply`
   under the name `[Favicond_anonymous]` (the brackets indicate that this is not a reddit username)
 - other internal changes that are probably not important for users.
-- added 'count Incomming Modmail from nonmods?' in the settings with the default to off
+- added 'count Incomming Modmail from nonmods?' in the settings with the default to off.
 
 ### 0.2.8: inline-Datetime_global
 
@@ -155,7 +161,7 @@ and `n` Moderators accepted an invite and `n` were Fired. and devvit apps change
 
 ### 0.2.6: upadated readme
 
-- upadated readme
+- upadated readme.
 
 ### 0.2.5: Favicond\_
 
@@ -167,7 +173,7 @@ and `n` Moderators accepted an invite and `n` were Fired. and devvit apps change
 
 ### 0.2.3: minor changes (0.2.4: nothing)
 
-- changes it so logs expire 4 days instead of 2
+- changes it so logs expire 4 days instead of 2.
 
 ### 0.2.2
 
@@ -186,32 +192,32 @@ and `n` Moderators accepted an invite and `n` were Fired. and devvit apps change
 - added 2 settings
   - 'per mod statistics?': if enabled it will breakdown each mod's actions.
   - 'Enable daily modmail notification': if enabled it will send a modmail with the breakdown.
-- other internal changes i cant remember so they probably not imporant
+- other internal changes i cant remember so they probably not imporant.
 
 ### 0.1.4
 
 - made it so it only uses `wiki/modlog-stats` for updates, beware.
-- updated action_reasons
+- updated action_reasons.
 
 ### 0.1.3
 
-- changed so it reports daily
-- you now teleport when manually update it
-- other internal changes i cant remember so they probably not imporant
+- changed so it reports daily.
+- you now teleport when manually update it.
+- other internal changes i cant remember so they probably not imporant.
 
 ### 0.1.1
 
 - changed so it reports hourly, if a hour ever gets repeated then it is lost.
-- internally: changed so it saves to redis for longer savings
-- other internal changes i cant remember so they probably not imporant
+- internally: changed so it saves to redis for longer savings.
+- other internal changes i cant remember so they probably not imporant.
 
 ### 0.0.3
 
-- added most recent time and action counter
+- added most recent time and action counter.
 
 ### 0.0.2
 
-- inital release
+- inital release.
 
 ## list of popular iana timezones
 
