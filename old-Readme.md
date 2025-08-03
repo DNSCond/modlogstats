@@ -45,10 +45,7 @@ on github.
 
 ### 0.3.9: updated ReedMe
 
-- Overhauled README with clearer structure and feature descriptions.
-- Confirmed daily job scheduling at 00:00 UTC.
-- thanks to grok for rewriting the above. note that other versions of the readme are
-  available on github
+- a big overhaul of changes above the changelog
 
 ### 0.3.8: minilog for specifci users.
 
