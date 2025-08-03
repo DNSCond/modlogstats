@@ -85,203 +85,201 @@ on GitHub.
 Send feedback via modmail
 to [u/antboiy](https://www.reddit.com/message/compose/?to=antboiy&subject=modlogstats+feedback).
 
-## changelog
+## Changelog
 
-### 0.3.9: updated ReedMe
+### 0.3.9
 
-- a big overhaul of changes above the changelog
+- Overhauled README with clearer structure and feature descriptions.
+- Confirmed daily job scheduling at 00:00 UTC.
 
-### 0.3.8: minilog for specifci users.
+### 0.3.8
 
-- added a minilog for specific users.
-- went to hour 0 instead of hour 1 utc.
+- Added user-specific minilog for evaluating mod actions via `Evaluate User modlog`.
+- Confirmed daily job scheduling at 00:00 UTC.
 
-### 0.3.6: modmail logic update. (0.3.7: none)
+### 0.3.6 (0.3.7: none)
 
-- some modmailstats logic updates
+- Updated modmail stats logic.
 
-### 0.3.5: unknown
+### 0.3.5
 
-unknown
+- Unknown.
 
-### 0.3.4: \_Re0ly\_
+### 0.3.4
 
-- fixed the bugs where `Favicond_Modmail` `Favicond_Modmail_reply`,
-  `Favicond_Modmail_Incomming_Reply` `Favicond_Modmail_Incomming_Initial`,
-  `Favicond_Modmail_Admin` `Favicond_Modmail_Admin_Reply`
-  were inverted.
+- Fixed bugs
+  where `Favicond_Modmail`, `Favicond_Modmail_Reply`, `Favicond_Modmail_Incoming_Reply`, `Favicond_Modmail_Incoming_Initial`, `Favicond_Modmail_Admin`,
+  and `Favicond_Modmail_Admin_Reply` were inverted.
+- Fixed newline bugs in wiki output.
 
-### 0.3.4: \n\n
+### 0.3.3
 
-- fixed some newline bugs
+- Modmail stats now display as a log with mailer, moderator, status, and date.
+- Added navigation to `modlog-stats` for `Update Mod Stats (all time)`.
+- Improved modmail event handling.
 
-### 0.3.3: ModmailStats upgrade
+### 0.3.2
 
-- the modmail stats will now display a log instead of a summery.
-- Teleport aldded to '`Update Mod Stats (all time)`'.
-- **better working for modmail events.**
+- Added a time option.
+- Changed the default from 00:00[UTC] to 06:00[UTC].
+- Added TeleportTo menu options.
 
-### 0.3.2: Timer Timee
+### 0.3.1
 
-- added a time option.
-- changed the default from 00:00[UTC] to 06:00[UTC].
-- added TeleportTo menu options.
+- Fixed bug where it directed to modlog-stats instead of modmail-stats.
 
-### 0.3.1: fixed bug
+### 0.3.0
 
-bug where it directed to modlog-stats instead modmail-stats
+- Added a General Statistics section.
+- Latest-Action-At: <Fri Jun 27 2025 00:00:00 UTC+0000 (UTC)>
+- Moderators removed n comments and n posts. Moderators approved n comments and n posts.
+- That is a total of n comments actioned on and n posts.
+- nn.nn% of the comments actioned on were removed. nn.nn% for posts.
+- Moderators banned n users, distinguished n posts or comments, stickied n of them.
+- and n Moderators accepted an invite and n were Fired, and devvit apps changed n times.
 
-### 0.3.0: added a General Statistics section.
+### 0.2.20
 
-Latest-Action-At: <`Fri Jun 27 2025 00:00:00 UTC+0000 (UTC)`>  
-Moderators removed `n` comments and `n` posts.Moderators approved `n` comments and `n` posts.  
-That is a total of `n` comments actioned on and `n` posts.  
-`nn.nn%` of the comments actioned on were removed. `nn.nn%` for posts
-Moderators banned `n` users. distinguished `n` posts or comments. stickied `n` of them.
-and `n` Moderators accepted an invite and `n` were Fired. and devvit apps changed `n` times.
+- Added `modmail-stats` as a wikipage.
+- Moderator Mail Activity Statistics.
+- It shows mailer, count, percentage, moderationStatus.
+- moderationStatus is one of [A] = reddit identified this as Admin; [M] = reddit identified this as Mod of this
+  subreddit; [U] = any other user.
+- Added some settings, specifically modmail-stats, enabled?.
 
-### 0.2.20: added modmail Statistics (part 2)
+### 0.2.19
 
-- added `modmail-stats` as a wikipage.
-- \# Moderator Mail Activity Statistics
-- it showns  mailer, count, percentage, moderationStatus.
-- moderationStatus is oneOf `[A]` = reddit identified this as Admin; `[M]` = reddit identified this as Mod of this subreddit; `[U]` = any other user;
-- added some settings, specifically `modmail-stats`, `enabled?`.
+- See 0.2.20.
 
-### 0.2.19: added modmail Statistics
+### 0.2.18
 
-- see 0.2.20
+- Fixed disrespect to setting.
 
-### 0.2.18: fixed disrespect to setting
+### 0.2.17
 
-- fixed disrespect to setting
+- The modmail system has been rewritten.
+- Favicond_Modmail_Admin is now used for accounts that Reddit identifies as Admin.
+- A modmail Statistics section is in the making.
 
-### 0.2.17: Favicond_Modmail_Admin
+### 0.2.16
 
-- the modmail system has been rewritten.
-- Favicond_Modmail_Admin is now used for accounts that reddit identifies as Admin
-- a modmail Statistics section is in the making
+- Modmails should now be notifications.
 
-### 0.2.16: createModNotification
+### 0.2.15
 
-- modmails should now be notifications
+- Fixed bug where Most-Recent-Action displayed <0 seconds>.
 
-### 0.2.15: fixed bug where Most-Recent-Action: displayed <0 seconds>
+### 0.2.14
 
-- fixed bug where Most-Recent-Action: displayed <0 seconds>
+- Fixed bug where the mod list is empty.
 
-### 0.2.14: fixed bug where the mod list is empty
+### 0.2.13
 
-- fixed bug where the mod list is empty.
+- Logs expire at 90 days.
+- Added proper feedback.
 
-### 0.2.13: added proper feedback
+### 0.2.12
 
-- logs expure at 90 days;
-- added proper feedback.
-
-### 0.2.12: fixed bug
-
-- Evaulatae user now compares case insensitive.
+- Evaluate user now compares case insensitive.
 - "generate debug log" was added.
 
-### 0.2.11: fixed header bug
+### 0.2.11
 
-- fixed header bug.
+- Fixed header bug.
 
-### 0.2.10: Evaluate.User
+### 0.2.10
 
-- after installing this update, mod actions with an affectedUser can now be queried per user.
-- when querying a user the result will be send as modmail.
-- this information will not be available in the regular reports.
+- After installing this update, mod actions with an affectedUser can now be queried per user.
+- When querying a user, the result will be sent as modmail.
+- This information will not be available in the regular reports.
 
-### 0.2.9: Favicond_Modmail_Incomming_Reply
+### 0.2.9
 
-- updated and added
-    - `Favicond_Modmail_Incomming_Reply` and `Favicond_Modmail_Incomming_Initial`
-- some changes to the "all time" button
-- modmail from users should be registered as `Favicond_Modmail_Incomming_Initial` and replies as `Favicond_Modmail_Incomming_Reply`
-  under the name `[Favicond_anonymous]` (the brackets indicate that this is not a reddit username)
-- other internal changes that are probably not important for users.
-- added 'count Incomming Modmail from nonmods?' in the settings with the default to off.
+- Updated and added Favicond_Modmail_Incoming_Reply and Favicond_Modmail_Incoming_Initial.
+- Some changes to the "all time" button.
+- Modmail from users should be registered as Favicond_Modmail_Incoming_Initial and replies as
+  Favicond_Modmail_Incoming_Reply under the name [Favicond_anonymous] (the brackets indicate that this is not a Reddit
+  username).
+- Other internal changes that are probably not important for users.
+- Added 'count Incoming Modmail from nonmods?' in the settings with the default to off.
 
-### 0.2.8: inline-Datetime_global
+### 0.2.8
 
 - Most-Recent-Action: <0 seconds> gets added when 'per mod statistics?' is enabled for each mod.
-- the debuglog is now also in relative time.
-- other internal changes that are not important for users.
+- The debuglog is now also in relative time.
+- Other internal changes that are not important for users.
 
-### 0.2.7: stoplog
+### 0.2.7
 
-- the debug log does no longer get send as a modmail
-- changed `Favicond_ModMail` to `Favicond_Modmail`
+- The debug log does no longer get sent as a modmail.
+- Changed Favicond_ModMail to Favicond_Modmail.
 
-### 0.2.6: upadated readme
+### 0.2.6
 
-- upadated readme.
+- Updated readme.
 
-### 0.2.5: Favicond\_
+### 0.2.5
 
-- changes it so logs expire 25 days instead of 4
-- Modmails are now counted. only if a moderator sends a modmail that is.
-- Favicond\_ actions are actions woroth considering. like Modmail. Favicond\_ModMail is for initiators and Favicond\_ModMail\_Reply is for replies.
-- there now is more control over the output.
-- other internal changes that are probably not imporant.
+- Changed so logs expire 25 days instead of 4.
+- Modmails are now counted, only if a moderator sends a modmail.
+- Favicond_ actions are actions worth considering, like Modmail. Favicond_ModMail is for initiators and
+  Favicond_ModMail_Reply is for replies.
+- There is now more control over the output.
+- Other internal changes that are probably not important.
 
-### 0.2.3: minor changes (0.2.4: nothing)
+### 0.2.3 (0.2.4: nothing)
 
-- changes it so logs expire 4 days instead of 2.
+- Changed so logs expire 4 days instead of 2.
 
 ### 0.2.2
 
-- added a list of common timezones at the bottom of this readme.
-- defaultValue: "UTC",
+- Added a list of common timezones at the bottom of this readme.
+- defaultValue: "UTC".
 
 ### 0.2.1
 
-- added an all time option (250 day in the past at most)
-- added a timezone option for those that want the bot to display in their timezone.
-  (just search your iana timezone, should be somewhere)
-- other internal changes that are not imporant.
+- Added an all time option (250 days in the past at most).
+- Added a timezone option for those that want the bot to display in their timezone (just search your IANA timezone).
+- Other internal changes that are not important.
 
 ### 0.2.0
 
-- added 2 settings
+- Added 2 settings:
     - 'per mod statistics?': if enabled it will breakdown each mod's actions.
     - 'Enable daily modmail notification': if enabled it will send a modmail with the breakdown.
-- other internal changes i cant remember so they probably not imporant.
+- Other internal changes I can't remember so they probably not important.
 
 ### 0.1.4
 
-- made it so it only uses `wiki/modlog-stats` for updates, beware.
-- updated action_reasons.
+- Made it so it only uses wiki/modlog-stats for updates, beware.
+- Updated action_reasons.
 
 ### 0.1.3
 
-- changed so it reports daily.
-- you now teleport when manually update it.
-- other internal changes i cant remember so they probably not imporant.
+- Changed so it reports daily.
+- You now teleport when manually update it.
+- Other internal changes I can't remember so they probably not important.
 
 ### 0.1.1
 
-- changed so it reports hourly, if a hour ever gets repeated then it is lost.
-- internally: changed so it saves to redis for longer savings.
-- other internal changes i cant remember so they probably not imporant.
+- Changed so it reports hourly; if an hour ever gets repeated then it is lost.
+- Internally: changed so it saves to Redis for longer savings.
+- Other internal changes I can't remember so they probably not important.
 
 ### 0.0.3
 
-- added most recent time and action counter.
+- Added most recent time and action counter.
 
 ### 0.0.2
 
-- inital release.
+- Initial release.
 
-## list of popular iana timezones
+## Supported Timezones
 
-Source: https://g.co/gemini/share/4c734776d334
+Set the `Timezone` setting to an IANA timezone (e.g., `America/New_York`) to display dates in your local time.
+Search for your timezone if not listed below:
 
-if your timezone is not present, search for your iana timezone on a search engine
-
-- UTC (Coordinated Universal Time - the base)
+- UTC (Coordinated Universal Time)
 - Europe/Amsterdam (CET/CEST - Netherlands)
 - Europe/London (GMT/BST - UK)
 - Europe/Paris (CET/CEST - France)
@@ -328,7 +326,6 @@ if your timezone is not present, search for your iana timezone on a search engin
 - Australia/Darwin (ACST - Australia North)
 - Pacific/Auckland (NZDT/NZST - New Zealand)
 - Pacific/Fiji (FJT/FJST - Fiji)
-- Pacific/Honolulu (HST - This is a repeat, let's swap for a different one)
 - Pacific/Tahiti (TAHT - French Polynesia)
 - Atlantic/Reykjavik (GMT - Iceland)
 - Indian/Mauritius (MUT - Mauritius)

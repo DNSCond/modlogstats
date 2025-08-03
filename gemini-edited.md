@@ -1,95 +1,70 @@
-# modlogstats
+# **modlogstats**
 
-Get competitive with your fellow moderators or dive deep into your subreddit’s moderation activity with modlogstats.
-This Devvit app provides tools to track and analyze moderator actions and modmail activity, updating wiki pages daily
-with detailed statistics or allowing manual updates via subreddit menu options.
+Ever wanted to get competitive with your mod buddies? Ever wanted to see a detailed breakdown of your subreddit's
+moderator log and mail activity?
+This Devvit app provides a suite of tools to help moderators track their contributions and
+analyze moderation activity.
 
-## Features
+## **Features**
 
-The app tracks moderator and modmail activity, presenting results in wiki pages (`modlog-stats` and `modmail-stats`) and
-optional modmail notifications. All features are configurable via settings.
+This bot updates wiki pages with moderator statistics daily, or you can trigger an update manually using the subreddit
+context menu.
 
-### Moderator Activity Statistics
+### **Moderator Activity Statistics**
 
-- **General Statistics**: Summarizes total actions, including comments/posts removed or approved, user bans,
-  distinguished posts/comments, stickied items, moderator invites/firings, and Devvit app changes.
-- **Most Active Moderators**: Lists each moderator’s action count and percentage of total actions, with optional
-  detailed per-moderator breakdowns (enable via `Per Mod Statistics` setting).
-- **Top 10 Most Common Actions**: Counts the most frequent actions from the moderator log.
-- **Top 10 Actions (Excluding AutoModerator Stickies)**: Filters out AutoModerator’s sticky actions for a clearer view
-  of human moderation.
-- **User Evaluation**: Query modlog actions for a specific user via the `Evaluate User modlog` menu item, with results
-  sent to the subreddit’s modmail inbox.
-- **Debug Log**: Appends a detailed log of all actions to the `modlog-stats` wiki page for troubleshooting (enable
-  via `debuglog` setting).
-- **Navigation**: Quickly access `modlog-stats` and `modmail-stats` wiki pages via `TeleportTo Modlog Summary`
-  and `TeleportTo Modmail Summary` menu items.
+* **Most Active Moderators**: Displays a breakdown of actions taken by each moderator, including their percentage of
+  total actions.
+* **Top 10 Most Common Actions**: Counts the most frequent actions from the moderator log.
+* **Top 10 Actions (excluding AutoModerator stickies)**: Filters out actions caused by AutoModerator to provide a
+  clearer view of human moderation activity.
+* **User Evaluation**: A menu item allows you to check the modlog history for a specific user. The results are sent
+  directly to the modmail inbox.
 
-### Modmail Activity Statistics
+### **Modmail Activity Statistics**
 
-- Tracks modmail activity when the `Modmail Stats` setting is enabled, saving results to the `modmail-stats` wiki page
-  as a log with columns for mailer, moderator, moderation status (`[A]` for admin, `[M]` for moderator, `[U]` for other
-  users), and date.
-- Records both incoming messages from users and replies from moderators/admins, providing insights beyond Reddit’s
-  standard modlog.
+* When enabled in the settings, the app tracks modmail activity and saves it to a wiki page.
+* This feature records incoming messages from users and replies from moderators to provide additional insights not found
+  in the standard modlog.
 
-### Custom Actions (Favicond_)
+### **Custom Actions (Favicond\_)**
 
-Entries prefixed with `Favicond_` are custom events tracked by the app, not part of Reddit’s official modlog. The
-prefix `[Favicond_anonymous]` represents non-moderator users sending modmail. Custom actions include:
+Entries starting with Favicond\_ are custom events added by this application and are not part of Reddit's official
+modlog.
 
-- `Favicond_Modmail`: Moderator-initiated modmail messages.
-- `Favicond_Modmail_Reply`: Moderator replies in modmail conversations.
-- `Favicond_Modmail_Admin`: Admin-initiated modmail messages.
-- `Favicond_Modmail_Admin_Reply`: Admin replies in modmail conversations.
-- `Favicond_Modmail_Incoming_Initial`: First modmail message from a non-moderator.
-- `Favicond_Modmail_Incoming_Reply`: Non-moderator replies in ongoing modmail conversations.
+These custom actions include:
 
-### Manual Updates and Notifications
+* `Favicond_Modmail`: Tracks modmail events from moderators.
+* `Favicond_Modmail_Reply`: Tracks modmail replies from moderators.
+* `Favicond_Modmail_Admin`: Tracks modmail events from Reddit admins.
+* `Favicond_Modmail_Admin_Reply`: Tracks modmail replies from Reddit admins.
+* `Favicond_Modmail_Incomming_Initial`: Records the first message in a modmail conversation from a non-moderator.
+* `Favicond_Modmail_Incomming_Reply`: Tracks replies from non-moderators in an ongoing modmail conversation.
 
-- Trigger updates via subreddit menu options: `Update Mod Stats Now` (recent actions), `Update Mod Stats (all time)` (up
-  to 90 days), or `Update Mod Mail Stats Now`.
-- Receive daily moderator stats via modmail if the `Daily Modmail Notification` setting is enabled.
+[Send feedback about this](https://www.reddit.com/message/compose/?to=antboiy&subject=modlogstats+feedbnack)
 
-## Setup for Moderators
+## **Contributing**
 
-1. Install the app from the [Devvit app page](https://developers.reddit.com/apps/modlogstats).
-2. Add the app to your subreddit via moderation settings.
-3. Configure settings in the Devvit app interface:
-    - **Timezone**: Set an IANA timezone (e.g., `America/New_York`) to display dates in your
-      subreddit's local time (default: `UTC`).
-    - **Daily Modmail Notification**: Enable to receive daily moderator stats via modmail.
-    - **Per Mod Statistics**: Enable for detailed per-moderator action breakdowns in `modlog-stats`.
-    - **Modmail Stats**: Enable to track modmail activity in `modmail-stats`.
-    - **Count Incoming Modmail from Non-Mods**: Enable to include non-moderator modmail in stats (default: off).
-    - **Debug Log**: Enable to append a detailed action log to `modlog-stats` for troubleshooting.
-4. Access results in the `modlog-stats` and `modmail-stats` wiki pages or via subreddit menu options.
+modlogstats is open to issues and pull requests on
+([Devvit app page](https://developers.reddit.com/apps/modlogstats))
+([Github Repo](https://github.com/DNSCond/modlogstats))
 
-## Contributing
-
-modlogstats is open to issues and pull requests at the [Devvit app page](https://developers.reddit.com/apps/modlogstats)
-or [GitHub repository](https://github.com/DNSCond/modlogstats). Open an issue
-or [submit a pull request](https://docs.github.com/en/get-started/exploring-projects-on-github/contributing-to-a-project)
+You can open an issue
+or [open a pull request](https://docs.github.com/en/get-started/exploring-projects-on-github/contributing-to-a-project)
 on GitHub.
 
-### Pull Request Guidelines
+### **Pull Request Guidelines**
 
-- Keep pull requests small.
-- Use keyword functions (e.g., `function()`) instead of arrow functions,
-  unless for simple operations (e.g., `m => m.toLowerCase()`).
-- Avoid adding new dependencies unless necessary.
-- Ensure changes align with existing code style and functionality.
-
-## Feedback
-
-Send feedback via modmail
-to [u/antboiy](https://www.reddit.com/message/compose/?to=antboiy&subject=modlogstats+feedback).
+* Keep your pull requests (PRs) small.
+* Use keyword functions instead of arrow functions, unless they are simple, one-operation functions (e.g., m \=\>
+  m.toLowerString()).
+* Do not install new dependencies unless absolutely necessary.
 
 ## changelog
 
 ### 0.3.9: updated ReedMe
 
 - a big overhaul of changes above the changelog
+- co-written by google gemini (note that thi only is above the changelog heading)
 
 ### 0.3.8: minilog for specifci users.
 
@@ -144,8 +119,9 @@ and `n` Moderators accepted an invite and `n` were Fired. and devvit apps change
 
 - added `modmail-stats` as a wikipage.
 - \# Moderator Mail Activity Statistics
-- it showns  mailer, count, percentage, moderationStatus.
-- moderationStatus is oneOf `[A]` = reddit identified this as Admin; `[M]` = reddit identified this as Mod of this subreddit; `[U]` = any other user;
+- it showns mailer, count, percentage, moderationStatus.
+- moderationStatus is oneOf `[A]` = reddit identified this as Admin; `[M]` = reddit identified this as Mod of this
+  subreddit; `[U]` = any other user;
 - added some settings, specifically `modmail-stats`, `enabled?`.
 
 ### 0.2.19: added modmail Statistics
@@ -199,7 +175,8 @@ and `n` Moderators accepted an invite and `n` were Fired. and devvit apps change
 - updated and added
     - `Favicond_Modmail_Incomming_Reply` and `Favicond_Modmail_Incomming_Initial`
 - some changes to the "all time" button
-- modmail from users should be registered as `Favicond_Modmail_Incomming_Initial` and replies as `Favicond_Modmail_Incomming_Reply`
+- modmail from users should be registered as `Favicond_Modmail_Incomming_Initial` and replies
+  as `Favicond_Modmail_Incomming_Reply`
   under the name `[Favicond_anonymous]` (the brackets indicate that this is not a reddit username)
 - other internal changes that are probably not important for users.
 - added 'count Incomming Modmail from nonmods?' in the settings with the default to off.
@@ -223,7 +200,8 @@ and `n` Moderators accepted an invite and `n` were Fired. and devvit apps change
 
 - changes it so logs expire 25 days instead of 4
 - Modmails are now counted. only if a moderator sends a modmail that is.
-- Favicond\_ actions are actions woroth considering. like Modmail. Favicond\_ModMail is for initiators and Favicond\_ModMail\_Reply is for replies.
+- Favicond\_ actions are actions woroth considering. like Modmail. Favicond\_ModMail is for initiators and
+  Favicond\_ModMail\_Reply is for replies.
 - there now is more control over the output.
 - other internal changes that are probably not imporant.
 
