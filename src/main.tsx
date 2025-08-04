@@ -250,35 +250,6 @@ Devvit.addMenuItem({
   },
 });
 
-// Devvit.addMenuItem({
-//   label: 'generate debug log',
-//   description: 'not useful',
-//   location: 'subreddit',
-//   forUserType: 'moderator',
-//   async onPress(_event, context) {
-//     const utc = 'UTC', today = (new Datetime_global).toTimezone(utc),
-//       reason = 'generated the debug log', subredditName = context.subredditName;
-//     const timezone: string = await context.settings.get('Timezone') ?? utc;
-//     if (subredditName) {
-//       let content = (new Datetime_global(Date.now(), timezone)).toString() + '\n\n';
-//       let items, time = (new Datetime_global(today, utc)), letout = 0;
-//       const promise: ModActionEntry[] = [], redis = context.redis;
-//       time = addtoTime(time, 0, 0, 0, 0, +1);
-//       while (items = await redis.hGetAll('modlog:' + time.format('Y-m-d'))) {
-//         time = addtoTime(time, 0, 0, 0, 0, -1);
-//         for (const entry of Object.values(items)) {
-//           const parsed = JSON.parse(entry as string);
-//           parsed['date'] = new Date(parsed['date']);
-//           promise.push(parsed as ModActionEntry);
-//         }
-//         if ((++letout) > 90) break;
-//       }
-//       content += jsonEncodeIndent(promise, 2);
-//       await context.reddit.updateWikiPage({
-//         content, subredditName, page: 'modlog-stats', reason,
-//       });
-// context.ui.showToast('log successfully dumped!');}},});
-
 Devvit.addMenuItem({
   label: 'Update Mod Stats (all time)',
   description: 'the stats from up to 90 days ago',
@@ -368,8 +339,6 @@ const usernameForm = Devvit.createForm(
         }
       }
 
-      // bodyMarkdown += `\n\n${quoteMarkdown(markdown_escape())}\n\n`;
-
       bodyMarkdown += '| actionName | count |\n';
       bodyMarkdown += '|:-----------|------:|\n';
       Object.entries(actionCounts).sort(function (a: [string, number], b: [string, number]): number {
@@ -430,53 +399,6 @@ Devvit.addMenuItem({
     }
   },
 });
-
-// const timezoneForm = Devvit.createForm(
-//   data => ({
-//     fields: [
-//       {
-//         name: 'time',
-//         label: 'pick a Time',
-//         type: 'paragraph',
-//         defaultValue: data.time,
-//         required: true,
-//       }, {
-//         name: 'timezone',
-//         label: 'pick a Timezone',
-//         type: 'string',
-//         defaultValue: data.timezone,
-//         required: true,
-//         // @ts-ignore
-//         onValidate({ value }) {
-//           try {
-//             new Datetime_global(Date.now(), value);
-//           } catch (e) {
-//             return String(e);
-//           }
-//         },
-//       },
-//     ],
-//     title: 'Timezone Form',
-//     acceptLabel: 'Submit',
-//   }),
-//   async function (event, context) {
-//     const timezone = event.values.timezone,
-//       date = new Date(+(parseDate(event.values.time, { timezone }) ?? NaN));
-//     context.ui.showToast(Datetime_global(date));
-//   }
-// );
-
-// Devvit.addMenuItem({
-//   label: 'get Time',
-//   description: 'get a time in utc',
-//   location: 'subreddit',
-//   async onPress(_, context) {
-//     const subredditName = context.subredditName, time = Datetime_global();
-//     if (subredditName === undefined) return context.ui.showToast('no subredditName name');
-//     const timezone = await context.settings.get('Timezone') ?? 'UTC'; // Retrieve the setting
-//     context.ui.showForm(timezoneForm, { timezone, time }); // Pass as default value
-//   },
-// });
 
 function waterMark(subredditName?: string) {
   if (subredditName === undefined)
@@ -650,48 +572,6 @@ class CounterMap<K> extends Map<K, number> {
     return this.set(key, (this.get(key) ?? 0) + (+by));
   }
 }
-
-// class ArrayMap<K, V> extends Map<K, V[]> {
-//   pushTo(key: K, value: V): this {
-//     const array: V[] = this.get(key) ?? new Array;
-//     array.push(value);
-//     return this;
-//   }
-//   lengthOf(key: K): number {
-//     return (this.get(key) ?? new Array).length;
-//   }
-//   mapArray(key: K, func: (each: any, index: number, unknownArray: V[]) => V[]): any[] {
-//     return (this.get(key) ?? new Array).map(func, this);
-//   }
-//   reduceAll(func: (accumulator: any, currentValue: any, currentIndex: number, array: unknown[]) => any, initialValue: any): Map<K, V> {
-//     // accumulator, currentValue, currentIndex, array), initialValue
-//     const map = new Map<K, V>();
-//     for (const [key, value] of this) {
-//       map.set(key, value.reduce(func, initialValue));
-//     }
-//     return map;
-//   }
-//   /*mapAll(func: (each: any, index: number, unknownArray: V[]) => V): Map<K, V[]>
-//   {const map = new Map<K, V[]>; for (const [key, value] of this)
-//   {map.set(key, value.map(func)); } return map; }*/
-// }
-// function mapToJson(map: Map<string | symbol, any>) {
-//   const obj: { [key: string]: any } = {};
-//   for (const [key, value] of map) {
-//     // Include only string keys and explicitly exclude '__proto__'
-//     if (typeof key === 'string' && key !== '__proto__') {
-//       obj[key] = value;
-//     }
-//   }
-//   return obj;
-// }
-// function mapMapValues<K, V>(map: Map<K, V>, func: (each: V, key: K, unknownArray: Map<K, V>) => V) {
-//   const result = new Map<K, V>();
-//   for (const [key, value] of map.entries()) {
-//     result.set(key, func(value, key, map));
-//   }
-//   return result;
-// }
 
 function percentageForamt(Le: number, Ri: number): string {
   [Le, Ri] = [+Le, +Ri];
