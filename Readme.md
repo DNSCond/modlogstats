@@ -45,13 +45,18 @@ prefix `[Favicond_anonymous]` represents non-moderator users sending modmail. Cu
 - `Favicond_Modmail_Incoming_Initial`: First modmail message from a non-moderator.
 - `Favicond_Modmail_Incoming_Reply`: Non-moderator replies in ongoing modmail conversations.
 
+custom users include:
+
+- `[Favicond_anonymous]`: for when an author should probably be hidden.
+- `[Favicond_object Undefined]`: a user is not available with the data
+
 ### Manual Updates and Notifications
 
 - Trigger updates via subreddit menu options: `Update Mod Stats Now` (recent actions), `Update Mod Stats (all time)` (up
   to 90 days), or `Update Mod Mail Stats Now`.
 - Receive daily moderator stats via modmail if the `Daily Modmail Notification` setting is enabled.
 
-## Setup for Moderators
+## Setup
 
 1. Install the app from the [Devvit app page](https://developers.reddit.com/apps/modlogstats).
 2. Configure settings in the settings:
@@ -79,14 +84,9 @@ on GitHub.
 - Avoid adding new dependencies unless necessary.
 - Ensure changes align with existing code style and functionality.
 
-## Feedback
-
-Send feedback via modmail to
-[u/antboiy](https://www.reddit.com/message/compose/?to=antboiy&subject=modlogstats+feedback).
-
 ## changelog
 
-### 0.3.16: debug its own
+### 0.3.16: debug its own (0.3.17: updated reamde)
 
 - the debuglog is no longer a setting.
 - summon it with its dedicated menu action
