@@ -351,7 +351,7 @@ const usernameForm = Devvit.createForm(
       bodyMarkdown += '\n| actionName | Date |\n|:-----------|-----:|\n';
       bodyMarkdown += '\n' + actionLog.sort(function (le: { when: Date }, ri: { when: Date }): number {
         return +ri - +le;
-      }).map(m => `| ${m.actionName} | ${Datetime_global(m.when, timezone)} |`);
+      }).map(m => `| ${m.actionName} | ${Datetime_global(m.when, timezone)} |`).join('\n');
 
       await context.reddit.modMail.createModInboxConversation({
         subject: `modlog Evaluation For u/${username}`, bodyMarkdown,
@@ -468,8 +468,8 @@ Devvit.addMenuItem({
     })(), reason = `${usernameFormat(await context.reddit.getCurrentUsername())} wanted a debuglog`;
 
     const content = `\n# the debug Log\n\n| Action | ModeratorName | Date | affectedUser |\n|:-------|--------------:|-----:|-------------:|\n` +
-      promise.map(each => `| ${each.type} | ${usernameFormat(each.moderatorUsername)} | ${Datetime_global(each.date, timezone)}`
-        + ` | ${usernameFormat(each.affectedUsername || undefined)} |`).join('\n');
+      promise.sort((le, ri) => +ri.date - +le.date).map(each => `| ${each.type} | ${usernameFormat(each.moderatorUsername)}`
+        + ` | ${Datetime_global(each.date, timezone)} | ${usernameFormat(each.affectedUsername || undefined)} |`).join('\n');
     const wikipage = await context.reddit.updateWikiPage({ content, subredditName, page: 'debuglog-stats', reason });
     if (wikipage !== undefined) context.ui.navigateTo(`https://www.reddit.com/r/${wikipage.subredditName}/wiki/${wikipage.name}/`);
   },

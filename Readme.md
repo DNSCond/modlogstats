@@ -86,6 +86,14 @@ Send feedback via modmail to
 
 ## changelog
 
+### 0.3.14: \n
+
+- the 'Evaluate User modlog' should now display correctly
+
+### 0.3.13: .sort()
+
+- the debuglog should now sort in decending order of dates
+
 ### 0.3.12: debugg
 
 - reintroduced the debuglog
