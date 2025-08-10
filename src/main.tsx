@@ -1,10 +1,10 @@
 // Visit developers.reddit.com/docs to learn Devvit!
-
 import { Devvit, JobContext, ModAction, TriggerContext, WikiPage } from '@devvit/public-api';
 import { Datetime_global } from 'datetime_global/Datetime_global.ts';
 import { Temporal } from 'temporal-polyfill';
 import { ModMail } from "@devvit/protos";
 import { v4 as uuidv4 } from 'uuid';
+import { addUserIdToQueue, doDeletionQueue } from './OnAccountDelete.tsx';
 
 // Configure the app to use Reddit API
 Devvit.configure({ redditAPI: true, redis: true, });
@@ -529,6 +529,7 @@ async function updateMailStats(context: JobContext, forced: 'Daily' | 'Forced') 
 
 const daily_mod_stats_update = 'daily-mod-stats-update';
 const daily_mail_stats_update = 'daily-mail-stats-update';
+const onUserDelete = 'onUserDelete';
 
 async function update(context: TriggerContext) {
   const hourTime = '0';
@@ -554,6 +555,17 @@ async function update(context: TriggerContext) {
     await context.redis.set(`jobId-${daily_mail_stats_update}`, jobId);
   }
   ;
+  {
+    const oldJobId = await context.redis.get(`jobId-${onUserDelete}`);
+    if (oldJobId) await context.scheduler.cancelJob(oldJobId);
+    const jobId = await context.scheduler.runJob({
+      name: onUserDelete,
+      cron: `15 ${hourTime} * * *`,
+      data: {},
+    });
+    await context.redis.set(`jobId-${onUserDelete}`, jobId);
+  }
+  ;
 }
 
 Devvit.addSchedulerJob({ name: daily_mod_stats_update, async onRun(_event, context) { await updateFromQueue(context, 'Daily'); }, });
@@ -565,6 +577,14 @@ Devvit.addSchedulerJob({
       await updateMailStats(context, 'Daily');
     }
   },
+});
+
+Devvit.addSchedulerJob({
+  name: onUserDelete,
+  onRun: doDeletionQueue(async function (userId: string, context: JobContext) {
+    await context.redis.del(`modactionCount-${userId}`);
+    return true;
+  }),
 });
 
 function datetime_local_toUTCString(datetime_local: Datetime_global | Date, timezone: string): string {
@@ -695,13 +715,26 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
   }
 
   // Sort moderators by action count
-  const sortedMods: { name: string, count: number, percentage: string }[] = [...modCounts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([name, count]) => ({
-      name, count,
-      percentage: percentageForamt(count, totalActions),
-    }));
-  // {for(const mod of sortedMods){context.redis.set(``);}}
+  const sortedMods: { name: string, count: number, percentage: string, difference: number }[] =
+    [...modCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(function ([name, count]) {
+        const percentage = percentageForamt(count, totalActions);
+        return { name, count, percentage, difference: NaN, };
+      });
+
+  for (const sortedMod of sortedMods) {
+    sortedMod.difference = await (async function () {
+      const { count } = sortedMod, userId = (await context.reddit.getUserByUsername(sortedMod.name))?.id;
+      if (userId) {
+        await addUserIdToQueue(userId, context);
+        const previousCount = JSON.parse((await context.redis.get(`modactionCount-${userId}`)) ?? '{"count":0}')?.count;
+        await context.redis.set(`modactionCount-${userId}`, JSON.stringify({ count }));
+        if (isFinite(previousCount)) return count - previousCount;
+        return NaN;
+      } return NaN;
+    })();
+  }
 
   // Get top 10 actions
   const top10Actions = [...actionCounts]
@@ -766,7 +799,8 @@ function usernameFormat(string?: string, linked: boolean = false): string {
 }
 
 function generateWikiContent(datetimeLocal: Datetime_global,
-  mods: { name: string; count: any; percentage: any; }[], actions: { name: any; count: any; }[],
+  mods: { name: string; count: any; percentage: any; difference: number; }[],
+  actions: { name: any; count: any; }[],
   actionsNoAutoMod: any, totalActions: number, subredditName: string, options: {
     breakdownPerMod: ModBreakdown[], breakdownEachMod: boolean,
     ModActionEntries: ModActionEntry[], timezone: string,
@@ -801,11 +835,11 @@ function generateWikiContent(datetimeLocal: Datetime_global,
 
   // Most active moderators
   content += `\n\n## Most Active Moderators\n\n`;
-  content += `| Moderator | Actions | Percentage |\n`;
-  content += `|:----------|--------:|-----------:|\n`;
+  content += `| Moderator | Actions | Percentage | difference |\n`;
+  content += `|:----------|--------:|-----------:|-----------:|\n`;
 
   // mods.forEach(function (mod: any) { content += `| ${username(mod.name)} | \`${mod.count}\` | \`${mod.percentage}\` |\n`;});
-  content += mods.map(mod => `| ${usernameFormat(mod.name)} | ${mod.count} | ${mod.percentage} |\n`).join('');
+  content += mods.map(mod => `| ${usernameFormat(mod.name)} | ${mod.count} | ${mod.percentage} | ${mod.difference} |\n`).join('');
 
   // Top 10 actions
   content += `\n## Top 10 Most Common Actions\n\n`;
