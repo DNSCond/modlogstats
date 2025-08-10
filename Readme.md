@@ -86,7 +86,7 @@ Send feedback via modmail to
 
 ## changelog
 
-### 0.3.14: \n
+### 0.3.14: \n 0.3.15: same
 
 - the 'Evaluate User modlog' should now display correctly
 

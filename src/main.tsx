@@ -286,7 +286,7 @@ Devvit.addMenuItem({
   },
 });
 
-const usernameForm = Devvit.createForm(
+const usernameEvalForm = Devvit.createForm(
   {
     fields: [
       {
@@ -349,7 +349,7 @@ const usernameForm = Devvit.createForm(
 
       bodyMarkdown += '\n## actionlog';
       bodyMarkdown += '\n| actionName | Date |\n|:-----------|-----:|\n';
-      bodyMarkdown += '\n' + actionLog.sort(function (le: { when: Date }, ri: { when: Date }): number {
+      bodyMarkdown += actionLog.sort(function (le: { when: Date }, ri: { when: Date }): number {
         return +ri - +le;
       }).map(m => `| ${m.actionName} | ${Datetime_global(m.when, timezone)} |`).join('\n');
 
@@ -372,7 +372,7 @@ Devvit.addMenuItem({
   location: 'subreddit',
   forUserType: 'moderator',
   async onPress(_event, context) {
-    context.ui.showForm(usernameForm);
+    context.ui.showForm(usernameEvalForm);
   }
 });
 
