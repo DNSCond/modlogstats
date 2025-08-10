@@ -86,6 +86,11 @@ Send feedback via modmail to
 
 ## changelog
 
+### 0.3.12: debugg
+
+- reintroduced the debuglog
+- the debuglog should fetch all log entries in memory and log them on the `debuglog-stats` wikipage
+
 ### 0.3.11: updated RaedMe (again)
 
 - i cant think of anything new to add

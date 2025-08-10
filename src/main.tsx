@@ -430,6 +430,51 @@ Devvit.addMenuItem({
   },
 });
 
+Devvit.addMenuItem({
+  label: 'TeleportTo debug log',
+  description: 'a quick way to TeleportTo debug log',
+  location: 'subreddit', forUserType: 'moderator',
+  async onPress(_, context) {
+    const subredditName = context.subredditName;
+    if (subredditName === undefined) return context.ui.showToast('no subredditName name');
+    context.ui.navigateTo(`https://www.reddit.com/r/${subredditName}/wiki/debuglog-stats/`);
+  },
+});
+
+Devvit.addMenuItem({
+  label: 'create debug log',
+  description: 'create the log from the log entries i stored',
+  location: 'subreddit', forUserType: 'moderator',
+  async onPress(_, context) {
+    const subredditName = context.subredditName;
+    if (subredditName === undefined) return context.ui.showToast('no subredditName name');
+
+    const timezone: string = await context.settings.get('Timezone') ?? 'UTC',
+      today = (new Datetime_global).toTimezone(timezone), { redis } = context;
+    const promise: ModActionEntry[] = await (async function (): Promise<ModActionEntry[]> {
+      const promise: ModActionEntry[] = [], utc = 'UTC';
+      let items, time = (new Datetime_global(today, utc)), letout = 0;
+      //time = addtoTime(time, 0, 0, 0, 0, +1);
+      while (items = await redis.hGetAll('modlog:' + time.format('Y-m-d'))) {
+        time = addtoTime(time, 0, 0, 0, 0, -1);
+        for (const entry of Object.values(items)) {
+          const parsed = JSON.parse(entry as string);
+          parsed['date'] = new Date(parsed['date']);
+          promise.push(parsed as ModActionEntry);
+        }
+        if ((++letout) > 90) break;
+      }
+      return promise;
+    })(), reason = `${usernameFormat(await context.reddit.getCurrentUsername())} wanted a debuglog`;
+
+    const content = `\n# the debug Log\n\n| Action | ModeratorName | Date | affectedUser |\n|:-------|--------------:|-----:|-------------:|\n` +
+      promise.map(each => `| ${each.type} | ${usernameFormat(each.moderatorUsername)} | ${Datetime_global(each.date, timezone)}`
+        + ` | ${usernameFormat(each.affectedUsername || undefined)} |`).join('\n');
+    const wikipage = await context.reddit.updateWikiPage({ content, subredditName, page: 'debuglog-stats', reason });
+    if (wikipage !== undefined) context.ui.navigateTo(`https://www.reddit.com/r/${wikipage.subredditName}/wiki/${wikipage.name}/`);
+  },
+});
+
 // type sortedMailers = { name: string, count: number, percentage: string };
 
 async function updateMailStats(context: JobContext, forced: 'Daily' | 'Forced') {
@@ -719,7 +764,8 @@ function sumArray(self: number[]): number {
   return self.reduce(sum, 0);
 }
 
-function usernameFormat(string: string, linked: boolean = false): string {
+function usernameFormat(string?: string, linked: boolean = false): string {
+  if (string === undefined) return '[Favicond_object Undefined]';
   return /^[a-zA-Z0-9\-_]+$/.test(string) ? (linked ? `[u/${string}](https://www.reddit.com/u/${string}/)` : ('u/' + string)) : string;
 }
 
