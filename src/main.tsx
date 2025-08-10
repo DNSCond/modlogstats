@@ -71,12 +71,8 @@ Devvit.addSettings([
       },
     ],
   },
-  {
-    type: 'boolean',
-    name: 'debuglog',
-    label: 'recreate the log?',
-    helpText: 'if enabled then a minilog will be created on the bottom of the report',
-  },
+  // {type: 'boolean',name: 'debuglog',label: 'recreate the log?',
+  // helpText: 'if enabled then a minilog will be created on the bottom of the report'},
 ]);
 
 const Expire = 86400 * 90;
@@ -170,7 +166,7 @@ async function updateFromQueue(context: JobContext | Devvit.Context, $Daily: str
     subredditName: string = await context.reddit.getCurrentSubredditName(),
     today = new Datetime_global(today_.setUTCDate(today_.getUTCDate() - 1), 'UTC'),
     breakdownEachMod: boolean = await context.settings.get('breakdown-each-mod') ?? false,
-    debuglog: boolean = await context.settings.get('debuglog') ?? false;
+    debuglog: boolean = false;// await context.settings.get('debuglog') ?? false;
   const wikipage = await updateModStats(subredditName, await (async function (): Promise<ModActionEntry[]> {
     const items = await redis.hGetAll('modlog:' + today.format('Y-m-d')),
       promise: ModActionEntry[] = [];
@@ -213,7 +209,7 @@ Devvit.addMenuItem({
     context.ui.showToast('Updating mod stats...');
     const now = new Date(), timezone: string = await context.settings.get('Timezone') ?? 'UTC',
       breakdownEachMod: boolean = await context.settings.get('breakdown-each-mod') ?? false,
-      debuglog: boolean = await context.settings.get('debuglog') ?? false;
+      debuglog: boolean = false;// await context.settings.get('debuglog') ?? false;
     try {
       const subredditName: string = await context.reddit.getCurrentSubredditName(),
         modActions = await context.reddit.getModerationLog({ subredditName, limit: 1000, }).all();
@@ -261,7 +257,7 @@ Devvit.addMenuItem({
       today = (new Datetime_global).toTimezone(utc), redis = context.redis,
       subredditName: string = await context.reddit.getCurrentSubredditName(),
       breakdownEachMod: boolean = await context.settings.get('breakdown-each-mod') ?? false,
-      debuglog: boolean = await context.settings.get('debuglog') ?? false;
+      debuglog: boolean = false;// await context.settings.get('debuglog') ?? false;
 
     await updateModStats(subredditName, await (async function (): Promise<ModActionEntry[]> {
       let items, time = (new Datetime_global(today, utc)), letout = 0;

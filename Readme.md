@@ -86,6 +86,11 @@ Send feedback via modmail to
 
 ## changelog
 
+### 0.3.16: debug its own
+
+- the debuglog is no longer a setting.
+- summon it with its dedicated menu action
+
 ### 0.3.14: \n 0.3.15: same
 
 - the 'Evaluate User modlog' should now display correctly
