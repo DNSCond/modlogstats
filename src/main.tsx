@@ -1,10 +1,11 @@
 // Visit developers.reddit.com/docs to learn Devvit!
-import { Devvit, JobContext, ModAction, TriggerContext, WikiPage } from '@devvit/public-api';
+import { Devvit, JobContext, ModAction, RedisClient, TriggerContext, WikiPage } from '@devvit/public-api';
 import { Datetime_global } from 'datetime_global/Datetime_global.ts';
 import { Temporal } from 'temporal-polyfill';
 import { ModMail } from "@devvit/protos";
 import { v4 as uuidv4 } from 'uuid';
 import { addUserIdToQueue, doDeletionQueue } from './OnAccountDelete.tsx';
+import { jsonEncodeIndent } from 'anthelpers';
 
 // Configure the app to use Reddit API
 Devvit.configure({ redditAPI: true, redis: true, });
@@ -160,23 +161,56 @@ Devvit.addTrigger({
   },
 });
 
+async function getModActionsForDate(redis: RedisClient, date: Datetime_global): Promise<ModActionEntry[]> {
+  const items = await redis.hGetAll('modlog:' + date.format('Y-m-d'));
+  const actions: ModActionEntry[] = [];
+
+  for (const entry of Object.values(items)) {
+    const parsed = JSON.parse(entry as string);
+    parsed['date'] = new Date(parsed['date']);
+    actions.push(parsed as ModActionEntry);
+  }
+
+  return actions;
+}
+
+async function queryQueueModAction(today: Datetime_global, context: TriggerContext): Promise<ModActionEntry[]> {
+  return getModActionsForDate(context.redis, today);
+}
+
+async function queryQueueTimedModAction(today: Datetime_global, context: TriggerContext): Promise<ModActionEntry[]> {
+  let time = new Datetime_global(today, 'UTC');
+  const promise: ModActionEntry[] = [];
+  time = addtoTime(time, 0, 0, 0, 0, +1);
+  let letout = 0;
+
+  console.log (letout <= 90);
+  
+  while (letout <= 90) {
+    const actions: ModActionEntry[] = await getModActionsForDate(context.redis, time);
+    
+    promise.push(...actions);
+
+    time = addtoTime(time, 0, 0, 0, 0, -1);
+    letout++;
+
+    // Break if no items were found for this date
+    if (actions.length === 0) break;
+  }
+
+  return promise;
+}
+
 async function updateFromQueue(context: JobContext | Devvit.Context, $Daily: string) {
   const timezone: string = await context.settings.get('Timezone') ?? 'UTC',
-    today_ = new Date, redis = context.redis, tomorrow = new Date(today_),
+    today_ = new Date, tomorrow = new Date(today_),
     subredditName: string = await context.reddit.getCurrentSubredditName(),
-    today = new Datetime_global(today_.setUTCDate(today_.getUTCDate() - 1), 'UTC'),
+    today = new Datetime_global(today_, 'UTC'),//(today_.setUTCDate(today_.getUTCDate() - 1), 'UTC'),
     breakdownEachMod: boolean = await context.settings.get('breakdown-each-mod') ?? false,
     debuglog: boolean = false;// await context.settings.get('debuglog') ?? false;
-  const wikipage = await updateModStats(subredditName, await (async function (): Promise<ModActionEntry[]> {
-    const items = await redis.hGetAll('modlog:' + today.format('Y-m-d')),
-      promise: ModActionEntry[] = [];
-    for (const entry of Object.values(items)) {
-      const parsed = JSON.parse(entry as string);
-      parsed['date'] = new Date(parsed['date']);
-      promise.push(parsed as ModActionEntry);
-    }
-    return promise;
-  })(), context, 'modlog-stats', {
+  const wikipage = await updateModStats(subredditName,
+    await queryQueueModAction(today, context),
+    context, 'modlog-stats', {
     date: new Date(tomorrow), breakdownEachMod, debuglog, timezone,
     reason: `${$Daily} update at ${datetime_local_toUTCString(tomorrow, 'UTC')}`,
   });
@@ -214,7 +248,7 @@ Devvit.addMenuItem({
       const subredditName: string = await context.reddit.getCurrentSubredditName(),
         modActions = await context.reddit.getModerationLog({ subredditName, limit: 1000, }).all();
       const page = await updateModStats(subredditName, modActions.map(function (event: ModAction): ModActionEntry {
-        const type = event.type ?? 'unknown'; // Type of moderator action
+        const type = event.type ?? '[Favicond_unknown]'; // Type of moderator action
         const moderatorUsername = event?.moderatorName; // Moderator username
         return { type, moderatorUsername, date: new Date(event.createdAt) };
       }), context, 'modlog-stats', {
@@ -252,28 +286,15 @@ Devvit.addMenuItem({
   location: 'subreddit',
   forUserType: 'moderator',
   async onPress(_event, context) {
-    const utc = 'UTC';
-    const timezone: string = await context.settings.get('Timezone') ?? 'UTC',
-      today = (new Datetime_global).toTimezone(utc), redis = context.redis,
+    const today = (new Datetime_global).toTimezone('UTC'),
+      timezone: string = await context.settings.get('Timezone') ?? 'UTC',
       subredditName: string = await context.reddit.getCurrentSubredditName(),
       breakdownEachMod: boolean = await context.settings.get('breakdown-each-mod') ?? false,
       debuglog: boolean = false;// await context.settings.get('debuglog') ?? false;
 
-    await updateModStats(subredditName, await (async function (): Promise<ModActionEntry[]> {
-      let items, time = (new Datetime_global(today, utc)), letout = 0;
-      const promise: ModActionEntry[] = [];
-      time = addtoTime(time, 0, 0, 0, 0, +1);
-      while (items = await redis.hGetAll('modlog:' + time.format('Y-m-d'))) {
-        time = addtoTime(time, 0, 0, 0, 0, -1);
-        for (const entry of Object.values(items)) {
-          const parsed = JSON.parse(entry as string);
-          parsed['date'] = new Date(parsed['date']);
-          promise.push(parsed as ModActionEntry);
-        }
-        if ((++letout) > 90) break;
-      }
-      return promise;
-    })(), context, 'modlog-stats', {
+    await updateModStats(subredditName,
+      await queryQueueTimedModAction(today, context),
+      context, 'modlog-stats', {
       date: today.toDate(), breakdownEachMod, timezone, debuglog,
       reason: `allTime update at ${datetime_local_toUTCString(today, 'UTC')}`,
     });
@@ -299,23 +320,10 @@ const usernameEvalForm = Devvit.createForm(
   async function (event, context) {
     const currentUsername = await context.reddit.getCurrentUsername(),
       timezone: string = await context.settings.get('Timezone') ?? 'UTC',
-      today = (new Datetime_global).toTimezone(timezone), redis = context.redis;
+      today = (new Datetime_global).toTimezone(timezone);
     if (currentUsername === undefined) return;
-    const promise: ModActionEntry[] = await (async function (): Promise<ModActionEntry[]> {
-      const promise: ModActionEntry[] = [], utc = 'UTC';
-      let items, time = (new Datetime_global(today, utc)), letout = 0;
-      //time = addtoTime(time, 0, 0, 0, 0, +1);
-      while (items = await redis.hGetAll('modlog:' + time.format('Y-m-d'))) {
-        time = addtoTime(time, 0, 0, 0, 0, -1);
-        for (const entry of Object.values(items)) {
-          const parsed = JSON.parse(entry as string);
-          parsed['date'] = new Date(parsed['date']);
-          promise.push(parsed as ModActionEntry);
-        }
-        if ((++letout) > 90) break;
-      }
-      return promise;
-    })(), username: string = event.values.username.trim().replace(/^u\//, '') ?? '[undefined]';
+    const promise: ModActionEntry[] = await queryQueueTimedModAction(today, context),
+      username: string = event.values.username.trim().replace(/^u\//, '') ?? '[undefined]';
     if (/^[a-zA-Z0-9\-_]+$/.test(username)) {
       const actionCounts: { [actionName: string]: number } = {}, actionLog: { actionName: string, when: Date }[] = [];
       let { subredditName } = context, bodyMarkdown = `# Evaluated u/${username}  \n\n`, index = 0;
@@ -446,22 +454,9 @@ Devvit.addMenuItem({
     if (subredditName === undefined) return context.ui.showToast('no subredditName name');
 
     const timezone: string = await context.settings.get('Timezone') ?? 'UTC',
-      today = (new Datetime_global).toTimezone(timezone), { redis } = context;
-    const promise: ModActionEntry[] = await (async function (): Promise<ModActionEntry[]> {
-      const promise: ModActionEntry[] = [], utc = 'UTC';
-      let items, time = (new Datetime_global(today, utc)), letout = 0;
-      //time = addtoTime(time, 0, 0, 0, 0, +1);
-      while (items = await redis.hGetAll('modlog:' + time.format('Y-m-d'))) {
-        time = addtoTime(time, 0, 0, 0, 0, -1);
-        for (const entry of Object.values(items)) {
-          const parsed = JSON.parse(entry as string);
-          parsed['date'] = new Date(parsed['date']);
-          promise.push(parsed as ModActionEntry);
-        }
-        if ((++letout) > 90) break;
-      }
-      return promise;
-    })(), reason = `${usernameFormat(await context.reddit.getCurrentUsername())} wanted a debuglog`;
+      today = (new Datetime_global).toTimezone(timezone);
+    const promise: ModActionEntry[] = await queryQueueTimedModAction(today, context),
+      reason = `${usernameFormat(await context.reddit.getCurrentUsername())} wanted a debuglog`;
 
     const content = `\n# the debug Log\n\n| Action | ModeratorName | Date | affectedUser |\n|:-------|--------------:|-----:|-------------:|\n` +
       promise.sort((le, ri) => +ri.date - +le.date).map(each => `| ${each.type} | ${usernameFormat(each.moderatorUsername)}`
@@ -749,7 +744,7 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
   const breakdownPerMod = getSortedModBreakdown(ModActionEntries, sortedMods.map(s => s.name));
 
   // Generate wiki content
-  const debuglog = options.debuglog, {
+  const debuglog = options.debuglog || true, {
     content,
     content_debuglog,
     breakdownEachMod_content,
