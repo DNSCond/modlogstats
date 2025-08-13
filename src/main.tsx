@@ -184,18 +184,16 @@ async function queryQueueTimedModAction(today: Datetime_global, context: Trigger
   time = addtoTime(time, 0, 0, 0, 0, +1);
   let letout = 0;
 
-  console.log (letout <= 90);
-  
   while (letout <= 90) {
     const actions: ModActionEntry[] = await getModActionsForDate(context.redis, time);
-    
+
     promise.push(...actions);
 
     time = addtoTime(time, 0, 0, 0, 0, -1);
     letout++;
 
     // Break if no items were found for this date
-    if (actions.length === 0) break;
+    //if (actions.length === 0) break;
   }
 
   return promise;
@@ -208,15 +206,17 @@ async function updateFromQueue(context: JobContext | Devvit.Context, $Daily: str
     today = new Datetime_global(today_, 'UTC'),//(today_.setUTCDate(today_.getUTCDate() - 1), 'UTC'),
     breakdownEachMod: boolean = await context.settings.get('breakdown-each-mod') ?? false,
     debuglog: boolean = false;// await context.settings.get('debuglog') ?? false;
-  const wikipage = await updateModStats(subredditName,
-    await queryQueueModAction(today, context),
-    context, 'modlog-stats', {
-    date: new Date(tomorrow), breakdownEachMod, debuglog, timezone,
-    reason: `${$Daily} update at ${datetime_local_toUTCString(tomorrow, 'UTC')}`,
-  });
+  const updateDifference = $Daily === 'Daily',
+    wikipage = await updateModStats(subredditName,
+      await queryQueueModAction(today, context),
+      context, 'modlog-stats', {
+      date: new Date(tomorrow), breakdownEachMod, debuglog, timezone,
+      reason: `${$Daily} update at ${datetime_local_toUTCString(tomorrow, 'UTC')}`,
+      updateDifference,
+    });
 
   const enabled = await context.settings.get('daily-modmail-enabled');
-  if (enabled && $Daily === 'Daily') {
+  if (enabled && updateDifference) {
     const bodyMarkdown = wikipage.contents.content +
       wikipage.contents.breakdownEachMod_content,
       subredditId = context.subredditId;
@@ -254,6 +254,7 @@ Devvit.addMenuItem({
       }), context, 'modlog-stats', {
         date: now, breakdownEachMod, timezone, debuglog,
         reason: `manual update at ${datetime_local_toUTCString(now, 'UTC')}`,
+        updateDifference: false,
       });
       const wikipage = page.wikipage;
       context.ui.showToast('Mod stats updated successfully!');
@@ -297,6 +298,7 @@ Devvit.addMenuItem({
       context, 'modlog-stats', {
       date: today.toDate(), breakdownEachMod, timezone, debuglog,
       reason: `allTime update at ${datetime_local_toUTCString(today, 'UTC')}`,
+      updateDifference: false,
     });
     context.ui.showToast('Mod stats updated successfully!');
     context.ui.navigateTo(`https://www.reddit.com/r/${subredditName}/wiki/modlog-stats/`);
@@ -582,6 +584,17 @@ Devvit.addSchedulerJob({
   }),
 });
 
+
+Devvit.addMenuItem({
+  label: 'clean account queue',
+  location: 'subreddit',
+  forUserType: 'moderator',
+  onPress: doDeletionQueue(async function (userId: string, context: TriggerContext) {
+    await context.redis.del(`modactionCount-${userId}`);
+    return true;
+  }),
+});
+
 function datetime_local_toUTCString(datetime_local: Datetime_global | Date, timezone: string): string {
   return (new Datetime_global(datetime_local, timezone)).toString();
 }
@@ -637,10 +650,24 @@ function percentageForamt(Le: number, Ri: number): string {
   return `${percentage.toFixed(2)}%`;
 }
 
+function toDayte(datetime?: Date | number): Date {
+  const date = new Date(datetime ?? Date.now());
+  date.setUTCHours(0, 0, 0, 0);
+  return date;
+}
+
+function numberToString(n: number) {
+  n = +n;
+  if (Object.is(n, -0)) return '-0';
+  if (n >= 0) return `+${n}`;
+  return `${n}`;
+}
+
 async function updateModStats(subredditName: string, ModActionEntries: ModActionEntry[],
   context: Devvit.Context | JobContext, title: string, options: {
     date: Date, reason: string, breakdownEachMod: boolean,
     timezone: string, debuglog: boolean,
+    updateDifference: boolean,
   }): Promise<{
     wikipage: WikiPage,
     contents: { content: string, breakdownEachMod_content: string, content_debuglog: string }
@@ -717,20 +744,25 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
         const percentage = percentageForamt(count, totalActions);
         return { name, count, percentage, difference: NaN, };
       });
+  if (options.updateDifference) {
+    for (const sortedMod of sortedMods) {
+      sortedMod.difference = await (async function (): Promise<number> {
+        const { count } = sortedMod, userId = (await context.reddit.getUserByUsername(sortedMod.name))?.id;
+        if (userId) {
+          await addUserIdToQueue(userId, context);
+          const jsonContent = JSON.parse((await context.redis.get(`modactionCount-${userId}`)) ?? '{"count":0,"lastUpdated":"2024-01-01"}');
+          const previousCount = jsonContent?.count, lastUpdated = new Date(jsonContent?.lastUpdated ?? '2024-01-02'), today = toDayte();
 
-  for (const sortedMod of sortedMods) {
-    sortedMod.difference = await (async function () {
-      const { count } = sortedMod, userId = (await context.reddit.getUserByUsername(sortedMod.name))?.id;
-      if (userId) {
-        await addUserIdToQueue(userId, context);
-        const previousCount = JSON.parse((await context.redis.get(`modactionCount-${userId}`)) ?? '{"count":0}')?.count;
-        await context.redis.set(`modactionCount-${userId}`, JSON.stringify({ count }));
-        if (isFinite(previousCount)) return count - previousCount;
-        return NaN;
-      } return NaN;
-    })();
+          if (lastUpdated < today) {
+            lastUpdated.setTime(today as unknown as number);
+            await context.redis.set(`modactionCount-${userId}`, JSON.stringify({ count, lastUpdated }));
+          }
+          if (isFinite(previousCount)) return count - previousCount;
+          return NaN;
+        } return NaN;
+      })();
+    }
   }
-
   // Get top 10 actions
   const top10Actions = [...actionCounts]
     .sort((a, b) => b[1] - a[1]).slice(0, 10)
@@ -829,12 +861,12 @@ function generateWikiContent(datetimeLocal: Datetime_global,
   content += ` Fired. and devvit apps changed \`${options.dev_platform_app_changed}\` times.`;
 
   // Most active moderators
-  content += `\n\n## Most Active Moderators\n\n`;
+  content += `\n\n## Most Active Moderators\n\nthe difference is only calculated at the regularly scheduled update\n\n`;
   content += `| Moderator | Actions | Percentage | difference |\n`;
   content += `|:----------|--------:|-----------:|-----------:|\n`;
 
   // mods.forEach(function (mod: any) { content += `| ${username(mod.name)} | \`${mod.count}\` | \`${mod.percentage}\` |\n`;});
-  content += mods.map(mod => `| ${usernameFormat(mod.name)} | ${mod.count} | ${mod.percentage} | ${mod.difference} |\n`).join('');
+  content += mods.map(mod => `| ${usernameFormat(mod.name)} | ${mod.count} | ${mod.percentage} | ${numberToString(mod.difference)} |\n`).join('');
 
   // Top 10 actions
   content += `\n## Top 10 Most Common Actions\n\n`;
