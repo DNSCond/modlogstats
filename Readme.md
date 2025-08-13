@@ -86,6 +86,12 @@ on GitHub.
 
 ## changelog
 
+### 0.4.0: difference
+
+- updated to devvit 0.12.0
+- added the `difference` value
+- 
+
 ### 0.3.16: debug its own (0.3.17: updated reamde)
 
 - the debuglog is no longer a setting.
