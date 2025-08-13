@@ -90,7 +90,7 @@ on GitHub.
 
 - updated to devvit 0.12.0
 - added the `difference` value
-- 
+- other internal changes that are probably not important for users.
 
 ### 0.3.16: debug its own (0.3.17: updated reamde)
 
