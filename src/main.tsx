@@ -5,7 +5,7 @@ import { Temporal } from 'temporal-polyfill';
 import { ModMail } from "@devvit/protos";
 import { v4 as uuidv4 } from 'uuid';
 import { addUserIdToQueue, doDeletionQueue } from './OnAccountDelete.tsx';
-import { jsonEncodeIndent } from 'anthelpers';
+// import { jsonEncodeIndent } from 'anthelpers';
 
 // Configure the app to use Reddit API
 Devvit.configure({ redditAPI: true, redis: true, });
@@ -201,19 +201,20 @@ async function queryQueueTimedModAction(today: Datetime_global, context: Trigger
 
 async function updateFromQueue(context: JobContext | Devvit.Context, $Daily: string) {
   const timezone: string = await context.settings.get('Timezone') ?? 'UTC',
-    today_ = new Date, tomorrow = new Date(today_),
+    today_ = new Date, tomorrow = new Date(today_), updateDifference = $Daily === 'Daily',
     subredditName: string = await context.reddit.getCurrentSubredditName(),
-    today = new Datetime_global(today_, 'UTC'),//(today_.setUTCDate(today_.getUTCDate() - 1), 'UTC'),
     breakdownEachMod: boolean = await context.settings.get('breakdown-each-mod') ?? false,
     debuglog: boolean = false;// await context.settings.get('debuglog') ?? false;
-  const updateDifference = $Daily === 'Daily',
-    wikipage = await updateModStats(subredditName,
-      await queryQueueModAction(today, context),
-      context, 'modlog-stats', {
-      date: new Date(tomorrow), breakdownEachMod, debuglog, timezone,
-      reason: `${$Daily} update at ${datetime_local_toUTCString(tomorrow, 'UTC')}`,
-      updateDifference,
-    });
+
+  const today = !updateDifference ? new Datetime_global(today_, 'UTC') :
+    new Datetime_global(today_.setUTCDate(today_.getUTCDate() - 1), 'UTC');
+  const wikipage = await updateModStats(subredditName,
+    await queryQueueModAction(today, context),
+    context, 'modlog-stats', {
+    date: new Date(tomorrow), breakdownEachMod, debuglog, timezone,
+    reason: `${$Daily} update at ${datetime_local_toUTCString(tomorrow, 'UTC')}`,
+    updateDifference,
+  });
 
   const enabled = await context.settings.get('daily-modmail-enabled');
   if (enabled && updateDifference) {
@@ -584,16 +585,15 @@ Devvit.addSchedulerJob({
   }),
 });
 
-
-Devvit.addMenuItem({
-  label: 'clean account queue',
-  location: 'subreddit',
-  forUserType: 'moderator',
-  onPress: doDeletionQueue(async function (userId: string, context: TriggerContext) {
-    await context.redis.del(`modactionCount-${userId}`);
-    return true;
-  }),
-});
+// Devvit.addMenuItem({
+//   label: 'clean account queue',
+//   location: 'subreddit',
+//   forUserType: 'moderator',
+//   onPress: doDeletionQueue(async function (userId: string, context: TriggerContext) {
+//     await context.redis.del(`modactionCount-${userId}`);
+//     return true;
+//   }),
+// });
 
 function datetime_local_toUTCString(datetime_local: Datetime_global | Date, timezone: string): string {
   return (new Datetime_global(datetime_local, timezone)).toString();
@@ -744,7 +744,7 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
         const percentage = percentageForamt(count, totalActions);
         return { name, count, percentage, difference: NaN, };
       });
-  if (options.updateDifference) {
+  {
     for (const sortedMod of sortedMods) {
       sortedMod.difference = await (async function (): Promise<number> {
         const { count } = sortedMod, userId = (await context.reddit.getUserByUsername(sortedMod.name))?.id;
@@ -753,7 +753,7 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
           const jsonContent = JSON.parse((await context.redis.get(`modactionCount-${userId}`)) ?? '{"count":0,"lastUpdated":"2024-01-01"}');
           const previousCount = jsonContent?.count, lastUpdated = new Date(jsonContent?.lastUpdated ?? '2024-01-02'), today = toDayte();
 
-          if (lastUpdated < today) {
+          if (lastUpdated < today && options.updateDifference) {
             lastUpdated.setTime(today as unknown as number);
             await context.redis.set(`modactionCount-${userId}`, JSON.stringify({ count, lastUpdated }));
           }
