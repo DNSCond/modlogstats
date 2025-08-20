@@ -5,6 +5,7 @@ import { Temporal } from 'temporal-polyfill';
 import { ModMail } from "@devvit/protos";
 import { v4 as uuidv4 } from 'uuid';
 import { addUserIdToQueue, doDeletionQueue } from './OnAccountDelete.tsx';
+import { jsonEncode } from 'anthelpers';
 // import { jsonEncodeIndent } from 'anthelpers';
 
 // Configure the app to use Reddit API
@@ -281,6 +282,30 @@ Devvit.addMenuItem({
     }
   },
 });
+
+// Devvit.addMenuItem({
+//   label: 'Update Mod Stats and difference',
+//   description: 'gone next update',
+//   location: 'subreddit',
+//   forUserType: 'moderator',
+//   async onPress(_event, context) {
+//     const today = (new Datetime_global).toTimezone('UTC'),
+//       timezone: string = await context.settings.get('Timezone') ?? 'UTC',
+//       subredditName: string = await context.reddit.getCurrentSubredditName(),
+//       breakdownEachMod: boolean = await context.settings.get('breakdown-each-mod') ?? false,
+//       debuglog: boolean = false;// await context.settings.get('debuglog') ?? false;
+
+//     await updateModStats(subredditName,
+//       await queryQueueTimedModAction(today, context),
+//       context, 'modlog-stats', {
+//       date: today.toDate(), breakdownEachMod, timezone, debuglog,
+//       reason: `allTime update at ${datetime_local_toUTCString(today, 'UTC')}`,
+//       updateDifference: true,
+//     });
+//     context.ui.showToast('Mod stats updated successfully!');
+//     context.ui.navigateTo(`https://www.reddit.com/r/${subredditName}/wiki/modlog-stats/`);
+//   },
+// });
 
 Devvit.addMenuItem({
   label: 'Update Mod Stats (all time)',
@@ -748,18 +773,23 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
     for (const sortedMod of sortedMods) {
       sortedMod.difference = await (async function (): Promise<number> {
         const { count } = sortedMod, userId = (await context.reddit.getUserByUsername(sortedMod.name))?.id;
+        if (/\[Favicond_/i.test(sortedMod.name)) return 0;
         if (userId) {
           await addUserIdToQueue(userId, context);
           const jsonContent = JSON.parse((await context.redis.get(`modactionCount-${userId}`)) ?? '{"count":0,"lastUpdated":"2024-01-01"}');
-          const previousCount = jsonContent?.count, lastUpdated = new Date(jsonContent?.lastUpdated ?? '2024-01-02'), today = toDayte();
+          const previousCount = jsonContent?.count ?? 0, lastUpdated = new Date(jsonContent?.lastUpdated ?? '2024-01-02'), today = toDayte();
+          console.log(jsonEncode({
+            modname: sortedMod.name, canUpdate: lastUpdated < today, lastUpdated,
+            today, updateDifference: options.updateDifference, jsonContent, count
+          }));
 
           if (lastUpdated < today && options.updateDifference) {
             lastUpdated.setTime(today as unknown as number);
             await context.redis.set(`modactionCount-${userId}`, JSON.stringify({ count, lastUpdated }));
           }
           if (isFinite(previousCount)) return count - previousCount;
-          return NaN;
-        } return NaN;
+          else return NaN;
+        } return 0;
       })();
     }
   }

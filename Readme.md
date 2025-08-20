@@ -90,7 +90,12 @@ on GitHub.
 ### 0.4.4: `olderVersions.md`
 
 - the versions before the current minor version are moved to `olderVersions.md` on github.
-- more
+- internal use only, check back next update
+
+#### 0.4.5: 'Update Mod Stats and difference'
+
+- added 'Update Mod Stats and difference'
+- will be gone next update.
 
 ### 0.4.3: clean account queue
 
