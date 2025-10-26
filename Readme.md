@@ -90,7 +90,8 @@ on GitHub.
 ### 0.4.4: `olderVersions.md`
 
 - the versions before the current minor version are moved to `olderVersions.md` on github.
-- internal use only, check back next update
+- internal use only, check back next update.
+- [olderVersions.md](https://github.com/DNSCond/modlogstats/blob/main/olderVersions.md)
 
 #### 0.4.5: 'Update Mod Stats and difference'
 

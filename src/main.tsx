@@ -77,7 +77,8 @@ Devvit.addSettings([
   // helpText: 'if enabled then a minilog will be created on the bottom of the report'},
 ]);
 
-const Expire = 86400 * 90;
+const oneDayInseconds = 86400;
+const Expire = oneDayInseconds * 90;
 type incommingModMailEntry = {
   moderatorUsername: string | '[Favicond_anonymous]',
   mailerUsername: string, affectedUsername?: null,
@@ -581,12 +582,12 @@ async function update(context: TriggerContext) {
   {
     const oldJobId = await context.redis.get(`jobId-${onUserDelete}`);
     if (oldJobId) await context.scheduler.cancelJob(oldJobId);
-    const jobId = await context.scheduler.runJob({
-      name: onUserDelete,
-      cron: `15 ${hourTime} * * *`,
-      data: {},
-    });
-    await context.redis.set(`jobId-${onUserDelete}`, jobId);
+    // const jobId = await context.scheduler.runJob({
+    //   name: onUserDelete,
+    //   cron: `15 ${hourTime} * * *`,
+    //   data: {},
+    // });
+    // await context.redis.set(`jobId-${onUserDelete}`, jobId);
   }
   ;
 }
@@ -646,8 +647,7 @@ function getSortedModBreakdown(
 
   const unsortedBreakdowns: Record<string, ModBreakdown> = Object.fromEntries(
     Object.entries(breakdownMap).map(([moderatorUsername, actions]) => [
-      moderatorUsername,
-      {
+      moderatorUsername, {
         moderatorUsername,
         actions: Object.entries(actions)
           .map(([name, count]) => ({ name, count }))
@@ -781,11 +781,13 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
           console.log(jsonEncode({
             modname: sortedMod.name, canUpdate: lastUpdated < today, lastUpdated,
             today, updateDifference: options.updateDifference, jsonContent, count
-          }));
+          }, 2));
 
           if (lastUpdated < today && options.updateDifference) {
             lastUpdated.setTime(today as unknown as number);
-            await context.redis.set(`modactionCount-${userId}`, JSON.stringify({ count, lastUpdated }));
+            console.log({ count, lastUpdated, "updated-modname": sortedMod.name });
+            const expiration = ResolveSecondsAfter(oneDayInseconds * 3);
+            await context.redis.set(`modactionCount-${userId}`, JSON.stringify({ count, lastUpdated }), { expiration });
           }
           if (isFinite(previousCount)) return count - previousCount;
           else return NaN;
@@ -940,3 +942,6 @@ function generateWikiContent(datetimeLocal: Datetime_global,
 }
 
 export default Devvit;
+function ResolveSecondsAfter(s: number = 0, now?: Date | string | number): Date {
+  return new Date((new Date(now ?? Date.now())).setMilliseconds(0) + (+s) * 1000);
+}
