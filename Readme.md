@@ -87,9 +87,13 @@ on GitHub.
 
 ## changelog
 
-#### 0.4.6: fixed hope and dreams in differences; 0.4.7: updated readme
+### 0.4.6: fixed hope and dreams in differences; 0.4.7: updated readme
 
 - thats pretty much it
+
+#### 0.4.8: we lost our x.
+
+- internally: changed tsx to ts.
 
 ### 0.4.4: `olderVersions.md`
 
