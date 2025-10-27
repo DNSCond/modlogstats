@@ -4,7 +4,6 @@ import { Datetime_global } from 'datetime_global/Datetime_global.ts';
 import { Temporal } from 'temporal-polyfill';
 import { ModMail } from "@devvit/protos";
 import { v4 as uuidv4 } from 'uuid';
-import { addUserIdToQueue, doDeletionQueue } from './OnAccountDelete.tsx';
 import { jsonEncode } from 'anthelpers';
 // import { jsonEncodeIndent } from 'anthelpers';
 
@@ -284,30 +283,6 @@ Devvit.addMenuItem({
   },
 });
 
-// Devvit.addMenuItem({
-//   label: 'Update Mod Stats and difference',
-//   description: 'gone next update',
-//   location: 'subreddit',
-//   forUserType: 'moderator',
-//   async onPress(_event, context) {
-//     const today = (new Datetime_global).toTimezone('UTC'),
-//       timezone: string = await context.settings.get('Timezone') ?? 'UTC',
-//       subredditName: string = await context.reddit.getCurrentSubredditName(),
-//       breakdownEachMod: boolean = await context.settings.get('breakdown-each-mod') ?? false,
-//       debuglog: boolean = false;// await context.settings.get('debuglog') ?? false;
-
-//     await updateModStats(subredditName,
-//       await queryQueueTimedModAction(today, context),
-//       context, 'modlog-stats', {
-//       date: today.toDate(), breakdownEachMod, timezone, debuglog,
-//       reason: `allTime update at ${datetime_local_toUTCString(today, 'UTC')}`,
-//       updateDifference: true,
-//     });
-//     context.ui.showToast('Mod stats updated successfully!');
-//     context.ui.navigateTo(`https://www.reddit.com/r/${subredditName}/wiki/modlog-stats/`);
-//   },
-// });
-
 Devvit.addMenuItem({
   label: 'Update Mod Stats (all time)',
   description: 'the stats from up to 90 days ago',
@@ -408,6 +383,49 @@ Devvit.addMenuItem({
     context.ui.showForm(usernameEvalForm);
   }
 });
+
+// Devvit.addMenuItem({
+//   label: 'test',
+//   location: 'subreddit',
+//   forUserType: 'moderator',
+//   async onPress(_event, context) {
+//     context.ui.showForm(modActionStatusForm);
+//   }
+// });
+
+const modActionStatusForm = Devvit.createForm(
+  {
+    fields: [
+      {
+        type: 'string',
+        name: 'username',
+        label: 'Enter a username',
+        helpText: 'the user you want to evaluate. (without u/)',
+        required: true,
+      },
+    ],
+    title: 'Evaluate User',
+    acceptLabel: 'Submit',
+  },
+  async function (event, context) {
+    const currentUsername = await context.reddit.getCurrentUsername();
+    if (currentUsername === undefined) return;
+    const username: string = event.values.username.trim().replace(/^u\//, '') ?? '[undefined]';
+    if (/^[a-zA-Z0-9\-_]+$/.test(username)) {
+      const userId = (await context.reddit.getUserByUsername(username))?.id;
+      if (userId) {
+        const text = String(await context.redis.get(`modactionCount-${userId}`));
+        context.ui.showToast({ text });
+        return;
+      }
+      context.ui.showToast({ text: `Done, check the modmail` });
+    } else if (username === '[undefined]') {
+      context.ui.showToast({ text: `there was no username given` });
+    } else {
+      context.ui.showToast({ text: `that username is syntactically invalid` });
+    }
+  }
+);
 
 Devvit.addMenuItem({
   label: 'Update Mod Mail Stats Now',
@@ -603,13 +621,13 @@ Devvit.addSchedulerJob({
   },
 });
 
-Devvit.addSchedulerJob({
-  name: onUserDelete,
-  onRun: doDeletionQueue(async function (userId: string, context: JobContext) {
-    await context.redis.del(`modactionCount-${userId}`);
-    return true;
-  }),
-});
+// Devvit.addSchedulerJob({
+//   name: onUserDelete,
+//   onRun: doDeletionQueue(async function (userId: string, context: JobContext) {
+//     await context.redis.del(`modactionCount-${userId}`);
+//     return true;
+//   }),
+// });
 
 // Devvit.addMenuItem({
 //   label: 'clean account queue',
@@ -775,7 +793,7 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
         const { count } = sortedMod, userId = (await context.reddit.getUserByUsername(sortedMod.name))?.id;
         if (/\[Favicond_/i.test(sortedMod.name)) return 0;
         if (userId) {
-          await addUserIdToQueue(userId, context);
+          // await addUserIdToQueue(userId, context);
           const jsonContent = JSON.parse((await context.redis.get(`modactionCount-${userId}`)) ?? '{"count":0,"lastUpdated":"2024-01-01"}');
           const previousCount = jsonContent?.count ?? 0, lastUpdated = new Date(jsonContent?.lastUpdated ?? '2024-01-02'), today = toDayte();
           console.log(jsonEncode({
@@ -785,7 +803,7 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
 
           if (lastUpdated < today && options.updateDifference) {
             lastUpdated.setTime(today as unknown as number);
-            console.log({ count, lastUpdated, "updated-modname": sortedMod.name });
+            console.log(jsonEncode({ count, lastUpdated, "updated-modname": sortedMod.name }));
             const expiration = ResolveSecondsAfter(oneDayInseconds * 3);
             await context.redis.set(`modactionCount-${userId}`, JSON.stringify({ count, lastUpdated }), { expiration });
           }
