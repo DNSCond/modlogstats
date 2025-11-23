@@ -238,7 +238,7 @@ function addtoTime(Datetime_global: Datetime_global, hours: number = 0, minutes:
 // Add a menu item to manually trigger the update
 Devvit.addMenuItem({
   label: 'Update Mod Stats Now',
-  description: 'only check the log, Favicond_ wont be considered',
+  description: 'u/modlogstats: only check the log, Favicond_ wont be considered',
   location: 'subreddit',
   forUserType: 'moderator', // Only visible to moderators
   async onPress(_event, context) {
@@ -270,7 +270,7 @@ Devvit.addMenuItem({
 
 Devvit.addMenuItem({
   label: 'Update Mod Stats Now (immediately)',
-  description: 'do whatever is timed NOW',
+  description: 'u/modlogstats: do whatever is timed NOW',
   location: 'subreddit',
   forUserType: 'moderator',
   async onPress(_event, context) {
@@ -285,7 +285,7 @@ Devvit.addMenuItem({
 
 Devvit.addMenuItem({
   label: 'Update Mod Stats (all time)',
-  description: 'the stats from up to 90 days ago',
+  description: 'u/modlogstats: the stats from up to 90 days ago',
   location: 'subreddit',
   forUserType: 'moderator',
   async onPress(_event, context) {
@@ -376,7 +376,7 @@ const usernameEvalForm = Devvit.createForm(
 
 Devvit.addMenuItem({
   label: 'Evaluate User modlog',
-  description: 'check the mod for a particular user',
+  description: 'u/modlogstats: check the mod for a particular user',
   location: 'subreddit',
   forUserType: 'moderator',
   async onPress(_event, context) {
@@ -429,7 +429,7 @@ const modActionStatusForm = Devvit.createForm(
 
 Devvit.addMenuItem({
   label: 'Update Mod Mail Stats Now',
-  description: 'the modmail stats',
+  description: 'u/modlogstats: the modmail stats',
   location: 'subreddit',
   forUserType: 'moderator',
   async onPress(_event, context) {
@@ -461,7 +461,7 @@ function waterMark(subredditName?: string) {
 
 Devvit.addMenuItem({
   label: 'TeleportTo Modlog Summery',
-  description: 'a quick way to TeleportTo Modlog Summery',
+  description: 'u/modlogstats: a quick way to TeleportTo Modlog Summery',
   location: 'subreddit', forUserType: 'moderator',
   async onPress(_, context) {
     const subredditName = context.subredditName;
@@ -472,7 +472,7 @@ Devvit.addMenuItem({
 
 Devvit.addMenuItem({
   label: 'TeleportTo Modmail Summery',
-  description: 'a quick way to TeleportTo Modmail Summery',
+  description: 'u/modlogstats: a quick way to TeleportTo Modmail Summery',
   location: 'subreddit', forUserType: 'moderator',
   async onPress(_, context) {
     const subredditName = context.subredditName;
@@ -483,7 +483,7 @@ Devvit.addMenuItem({
 
 Devvit.addMenuItem({
   label: 'TeleportTo debug log',
-  description: 'a quick way to TeleportTo debug log',
+  description: 'u/modlogstats: a quick way to TeleportTo debug log',
   location: 'subreddit', forUserType: 'moderator',
   async onPress(_, context) {
     const subredditName = context.subredditName;
@@ -494,7 +494,7 @@ Devvit.addMenuItem({
 
 Devvit.addMenuItem({
   label: 'create debug log',
-  description: 'create the log from the log entries i stored',
+  description: 'u/modlogstats: create the log from the log entries i stored',
   location: 'subreddit', forUserType: 'moderator',
   async onPress(_, context) {
     const subredditName = context.subredditName;
