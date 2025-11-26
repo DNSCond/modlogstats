@@ -796,14 +796,14 @@ async function updateModStats(subredditName: string, ModActionEntries: ModAction
           // await addUserIdToQueue(userId, context);
           const jsonContent = JSON.parse((await context.redis.get(`modactionCount-${userId}`)) ?? '{"count":0,"lastUpdated":"2024-01-01"}');
           const previousCount = jsonContent?.count ?? 0, lastUpdated = new Date(jsonContent?.lastUpdated ?? '2024-01-02'), today = toDayte();
-          console.log(jsonEncode({
-            modname: sortedMod.name, canUpdate: lastUpdated < today, lastUpdated,
-            today, updateDifference: options.updateDifference, jsonContent, count
-          }, 2));
+          // console.log(jsonEncode({
+          //   modname: sortedMod.name, canUpdate: lastUpdated < today, lastUpdated,
+          //   today, updateDifference: options.updateDifference, jsonContent, count
+          // }, 2));
 
           if (lastUpdated < today && options.updateDifference) {
             lastUpdated.setTime(today as unknown as number);
-            console.log(jsonEncode({ count, lastUpdated, "updated-modname": sortedMod.name }));
+            // console.log(jsonEncode({ count, lastUpdated, "updated-modname": sortedMod.name }));
             const expiration = ResolveSecondsAfter(oneDayInseconds * 3);
             await context.redis.set(`modactionCount-${userId}`, JSON.stringify({ count, lastUpdated }), { expiration });
           }
