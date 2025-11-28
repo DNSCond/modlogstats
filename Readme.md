@@ -87,11 +87,16 @@ on GitHub.
 
 ## changelog
 
+### 0.4.11
+
+- internal changes
+
 ### 0.4.12
 
 - the debug Log Is Temporaily Disabled Globally
 - in collaboration with [Wiki Publish](https://developers.reddit.com/apps/wikipublish),
-  all times are now Time URLs. [visit the Time URL Documentation on Wiki Publish's Github Repository]()
+  all times are now Time URLs. [visit the Time URL Documentation on Wiki Publish's Github
+  Repository](https://github.com/DNSCond/wikipublish/blob/main/WhatAreTimeURLs.md#time-urls)
 
 ### 0.4.11
 
