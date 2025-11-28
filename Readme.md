@@ -87,6 +87,12 @@ on GitHub.
 
 ## changelog
 
+### 0.4.12
+
+- the debug Log Is Temporaily Disabled Globally
+- in collaboration with [Wiki Publish](https://developers.reddit.com/apps/wikipublish),
+  all times are now Time URLs. [visit the Time URL Documentation on Wiki Publish's Github Repository]()
+
 ### 0.4.11
 
 u/modlogstats will now start his menu item's descriptions with his name.

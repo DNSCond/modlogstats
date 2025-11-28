@@ -640,7 +640,8 @@ Devvit.addSchedulerJob({
 // });
 
 function datetime_local_toUTCString(datetime_local: Datetime_global | Date, timezone: string): string {
-  return (new Datetime_global(datetime_local, timezone)).toString();
+  const dtg = new Datetime_global(datetime_local, timezone);
+  return `[${dtg.toString()}](https://clock.ant.ractoc.com/?t=${dtg.toISOString()}&format-custom=D%20M%20Y-m-d%20%5CTH%3Ai%3As%20%28e%29)`;
 }
 
 type ModBreakdown = {
@@ -949,11 +950,12 @@ function generateWikiContent(datetimeLocal: Datetime_global,
 
   let content_debuglog = '', crossSiteLog: [string, string, string][] | string = [];
   if (options.debuglog) {
-    content_debuglog += `\n## the debug Log\n\n| Action | ModeratorName | Date |\n|:-------|--------------:|-----:|\n`;
-    options.ModActionEntries.forEach(function (each: ModActionEntry) {// ago (${Datetime_global(each.date, timezone)})
-      content_debuglog += `| ${each.type} | ${usernameFormat(each.moderatorUsername)} | ${Datetime_global(each.date, timezone)} |\n`;
-      (crossSiteLog as [string, string, string][]).push([each.type, each.moderatorUsername, each.date.toISOString()]);
-    });
+    content_debuglog += '## the debug Log\n\nIs Temporaily Disabled Globally';
+    // content_debuglog += `\n## the debug Log\n\n| Action | ModeratorName | Date |\n|:-------|--------------:|-----:|\n`;
+    // options.ModActionEntries.forEach(function (each: ModActionEntry) {// ago (${Datetime_global(each.date, timezone)})
+    //   content_debuglog += `| ${each.type} | ${usernameFormat(each.moderatorUsername)} | ${Datetime_global(each.date, timezone)} |\n`;
+    //   (crossSiteLog as [string, string, string][]).push([each.type, each.moderatorUsername, each.date.toISOString()]);
+    // });
   }
   crossSiteLog = crossSiteLog.join(';');
   return { content, breakdownEachMod_content, content_debuglog, crossSiteLog };
