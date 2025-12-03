@@ -87,9 +87,13 @@ on GitHub.
 
 ## changelog
 
-### 0.4.13
+### 0.5.0
 
-- internal changes
+- moved the version numbers before 0.4.10 to the [older versions](https://github.com/DNSCond/modlogstats/blob/main/olderVersions.md) page.
+- a new data schema is out. for those diving into the code, v2 is the schema that is being used now,
+  `v1.ts` contains the code related to the old schema. for users, the only thing that changed is the descriptiveness of the logs.
+- splitted up the stats pages.
+
 
 ### 0.4.12
 
@@ -101,45 +105,6 @@ on GitHub.
 ### 0.4.11
 
 u/modlogstats will now start his menu item's descriptions with his name.
-
-### 0.4.9: attempt at fix failed.
-
-### 0.4.6: fixed hope and dreams in differences; 0.4.7: updated readme
-
-- thats pretty much it
-
-#### 0.4.8: we lost our x.
-
-- internally: changed tsx to ts.
-
-### 0.4.4: `olderVersions.md`
-
-- the versions before the current minor version are moved to `olderVersions.md` on github.
-- internal use only, check back next update.
-- [olderVersions.md](https://github.com/DNSCond/modlogstats/blob/main/olderVersions.md)
-
-#### 0.4.5: 'Update Mod Stats and difference'
-
-- added 'Update Mod Stats and difference'
-- will be gone next update.
-
-### 0.4.3: clean account queue
-
-- removed 'clean account queue' left overs from a dev version
-
-### 0.4.2: updateDifference
-
-- solved the bug where updates didnt happen
-
-### 0.4.1: new Datetime_global(today_.setUTCDate(today_.getUTCDate() - 1), 'UTC')
-
-- resolves ["if your modlogstats appears empty, please do not update yet "](https://www.reddit.com/user/antboiy/comments/1mqihz8/)
-
-### 0.4.0: difference
-
-- updated to devvit 0.12.0
-- added the `difference` value
-- other internal changes that are probably not important for users.
 
 ## list of popular iana timezones
 

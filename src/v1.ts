@@ -1,0 +1,649 @@
+import { type Devvit, type RedisClient, type TriggerContext, type ModAction, type JobContext, type WikiPage } from '@devvit/public-api';
+import { Datetime_global } from 'datetime_global/Datetime_global.ts';
+import { incommingModMailEntry, type ModActionEntry, } from './types.ts';
+import { formatTimeURL, oneDayInseconds, waterMark } from './helpers.ts';
+import { ResolveSecondsAfter } from 'anthelpers';
+import { Temporal } from 'temporal-polyfill';
+
+async function getModActionsForDate(redis: RedisClient, date: Datetime_global): Promise<{ actions: ModActionEntry[] }> {
+  const items = await redis.hGetAll('modlog:' + date.format('Y-m-d'));
+  const actions: ModActionEntry[] = [];
+
+  for (const entry of Object.values(items)) {
+    const parsed = JSON.parse(entry as string);
+    parsed['date'] = new Date(parsed['date']);
+    actions.push(parsed as ModActionEntry);
+  }
+
+  return { actions };
+}
+
+export async function queryQueueModAction(today: Datetime_global, context: TriggerContext): Promise<ModActionEntry[]> {
+  return (await getModActionsForDate(context.redis, today)).actions;
+}
+
+export async function queryQueueTimedModAction(today: Datetime_global, context: TriggerContext): Promise<ModActionEntry[]> {
+  let time = new Datetime_global(today, 'UTC');
+  const promise: ModActionEntry[] = [];
+  time = addtoTime(time, 0, 0, 0, 0, +1);
+  let letout = 0;
+
+  while (letout <= 90) {
+    const actions: ModActionEntry[] = (await getModActionsForDate(context.redis, time)).actions;
+
+    promise.push(...actions);
+
+    time = addtoTime(time, 0, 0, 0, 0, -1);
+    letout++;
+
+    // Break if no items were found for this date
+    //if (actions.length === 0) break;
+  }
+
+  return promise;
+}
+
+export function addtoTime(Datetime_global: Datetime_global, hours: number = 0, minutes: number = 0, seconds: number = 0, month: number = 0, day: number = 0, year: number = 0) {
+  const dur = new Temporal.Duration(year, month, day, hours, minutes, seconds),
+    zdt = Datetime_global.toTemporalZonedDateTime();
+  return new Datetime_global.constructor(zdt.add(dur), Datetime_global.getTimezoneId());
+}
+
+async function updateFromQueue(context: JobContext | Devvit.Context, $Daily: string) {
+  const timezone: string = await context.settings.get('Timezone') ?? 'UTC',
+    today_ = new Date, tomorrow = new Date(today_), updateDifference = $Daily === 'Daily',
+    subredditName: string = await context.reddit.getCurrentSubredditName(),
+    breakdownEachMod: boolean = await context.settings.get('breakdown-each-mod') ?? false,
+    debuglog: boolean = false;// await context.settings.get('debuglog') ?? false;
+
+  const today = !updateDifference ? new Datetime_global(today_, 'UTC') :
+    new Datetime_global(today_.setUTCDate(today_.getUTCDate() - 1), 'UTC');
+  const wikipage = await updateModStats(subredditName,
+    await queryQueueModAction(today, context),
+    context, 'modlog-stats', {
+    date: new Date(tomorrow), breakdownEachMod, debuglog, timezone,
+    reason: `${$Daily} update at ${datetime_local_toUTCString(tomorrow, 'UTC')}`,
+    updateDifference,
+  });
+
+  const enabled = await context.settings.get('daily-modmail-enabled');
+  if (enabled && updateDifference) {
+    const bodyMarkdown = wikipage.contents.content +
+      wikipage.contents.breakdownEachMod_content,
+      subredditId = context.subredditId;
+    await context.reddit.modMail.createModNotification({
+      subject: 'Daily Moderator Activity Statistics',
+      bodyMarkdown, subredditId,
+    });
+  }
+}
+
+export function applyTodevvitSingleton(devvit: typeof Devvit) {
+  // Add a menu item to manually trigger the update
+  devvit.addMenuItem({
+    label: 'Update Mod Stats Now',
+    description: 'u/modlogstats: only check the log, Favicond_ wont be considered',
+    location: 'subreddit',
+    forUserType: 'moderator', // Only visible to moderators
+    async onPress(_event, context) {
+      context.ui.showToast('Updating mod stats...');
+      const now = new Date, timezone: string = await context.settings.get('Timezone') ?? 'UTC',
+        breakdownEachMod: boolean = await context.settings.get('breakdown-each-mod') ?? false,
+        debuglog: boolean = false;// await context.settings.get('debuglog') ?? false;
+      try {
+        const subredditName: string = await context.reddit.getCurrentSubredditName(),
+          modActions = await context.reddit.getModerationLog({ subredditName, limit: 1000, }).all();
+        const page = await updateModStats(subredditName, modActions.map(function (event: ModAction): ModActionEntry {
+          const type = event.type ?? '[Favicond_unknown]'; // Type of moderator action
+          const moderatorUsername = event?.moderatorName; // Moderator username
+          return { type, moderatorUsername, date: new Date(event.createdAt) };
+        }), context, 'modlog-stats', {
+          date: now, breakdownEachMod, timezone, debuglog,
+          reason: `manual update at ${datetime_local_toUTCString(now, 'UTC')}`,
+          updateDifference: false,
+        });
+        const wikipage = page.wikipage;
+        context.ui.showToast('Mod stats updated successfully!');
+        if (wikipage !== undefined) context.ui.navigateTo(`https://old.reddit.com/r/${wikipage.subredditName}/wiki/${wikipage.name}/`);
+      } catch (error) {
+        console.error('Error updating mod stats:', error);
+        context.ui.showToast('Failed to update mod stats. Check logs for details.');
+      }
+    },
+  });
+
+  devvit.addMenuItem({
+    label: 'Update Mod Stats Now (immediately)',
+    description: 'u/modlogstats: do whatever is timed NOW',
+    location: 'subreddit',
+    forUserType: 'moderator',
+    async onPress(_event, context) {
+      try {
+        await updateFromQueue(context, 'Forced');
+        context.ui.showToast('Mod stats updated successfully!');
+      } catch (e) {
+        context.ui.showToast(String(e));
+      }
+    },
+  });
+
+  devvit.addMenuItem({
+    label: 'Update Mod Stats (all time)',
+    description: 'u/modlogstats: the stats from up to 90 days ago',
+    location: 'subreddit',
+    forUserType: 'moderator',
+    async onPress(_event, context) {
+      const today = (new Datetime_global).toTimezone('UTC'),
+        timezone: string = await context.settings.get('Timezone') ?? 'UTC',
+        subredditName: string = await context.reddit.getCurrentSubredditName(),
+        breakdownEachMod: boolean = await context.settings.get('breakdown-each-mod') ?? false,
+        debuglog: boolean = false;// await context.settings.get('debuglog') ?? false;
+
+      await updateModStats(subredditName,
+        await queryQueueTimedModAction(today, context),
+        context, 'modlog-stats', {
+        date: today.toDate(), breakdownEachMod, timezone, debuglog,
+        reason: `allTime update at ${datetime_local_toUTCString(today, 'UTC')}`,
+        updateDifference: false,
+      });
+      context.ui.showToast('Mod stats updated successfully!');
+      context.ui.navigateTo(`https://old.reddit.com/r/${subredditName}/wiki/modlog-stats/`);
+    },
+  });
+
+  const usernameEvalForm = devvit.createForm(
+    {
+      fields: [
+        {
+          type: 'string',
+          name: 'username',
+          label: 'Enter a username',
+          helpText: 'the user you want to evaluate. (without u/)',
+          required: true,
+        },
+      ],
+      title: 'Evaluate User',
+      acceptLabel: 'Submit',
+    },
+    async function (event, context) {
+      const currentUsername = await context.reddit.getCurrentUsername(),
+        timezone: string = await context.settings.get('Timezone') ?? 'UTC',
+        today = (new Datetime_global).toTimezone(timezone);
+      if (currentUsername === undefined) return;
+      const promise: ModActionEntry[] = await queryQueueTimedModAction(today, context),
+        username: string = event.values.username.trim().replace(/^u\//, '') ?? '[undefined]';
+      if (/^[a-zA-Z0-9\-_]+$/.test(username)) {
+        const actionCounts: { [actionName: string]: number } = {}, actionLog: { actionName: string, when: Date }[] = [];
+        let { subredditName } = context, bodyMarkdown = `# Evaluated u/${username}  \n\n`, index = 0;
+        bodyMarkdown += `Queried-By: <${usernameFormat(currentUsername, true)}>  \n${waterMark(subredditName)}  \n`;
+        bodyMarkdown += `Total-counted: ${index}  \nQueried-At: ${(new Datetime_global).toTimezone(timezone)}\n\n`;
+
+        for (let modActionEntry of promise) {
+          if (typeof modActionEntry.affectedUsername === 'string') {
+            if (modActionEntry.affectedUsername.toLocaleLowerCase() === username.toLocaleLowerCase()) {
+              index++;
+              if (actionCounts[modActionEntry.type] === undefined) {
+                actionCounts[modActionEntry.type] = 0;
+              }
+              actionCounts[modActionEntry.type]++;
+              actionLog.push({ actionName: modActionEntry.type, when: modActionEntry.date });
+            }
+          }
+        }
+
+        bodyMarkdown += '| actionName | count |\n';
+        bodyMarkdown += '|:-----------|------:|\n';
+        Object.entries(actionCounts).sort(function (a: [string, number], b: [string, number]): number {
+          return b[1] - a[1];
+        }).forEach(function (entry: [string, number]) {
+          bodyMarkdown += `| ${entry[0]} | ${entry[1]} |\n`;
+        });
+
+        bodyMarkdown += '\n## actionlog';
+        bodyMarkdown += '\n| actionName | Date |\n|:-----------|-----:|\n';
+        bodyMarkdown += actionLog.sort(function (le: { when: Date }, ri: { when: Date }): number {
+          return +ri - +le;
+        }).map(m => `| ${m.actionName} | ${formatTimeURL(new Datetime_global(m.when, timezone))} |`).join('\n');
+
+        await context.reddit.modMail.createModInboxConversation({
+          subject: `modlog Evaluation For u/${username}`, bodyMarkdown,
+          subredditId: context.subredditId, // This should be the subreddit where the form was submitted
+        });
+        context.ui.showToast({ text: `Done, check the modmail` });
+      } else if (username === '[undefined]') {
+        context.ui.showToast({ text: `there was no username given` });
+      } else {
+        context.ui.showToast({ text: `that username is syntactically invalid` });
+      }
+    }
+  );
+  devvit.addSchedulerJob({ name: daily_mod_stats_update, async onRun(_event, context) { await updateFromQueue(context, 'Daily'); }, });
+  devvit.addSchedulerJob({
+    name: daily_mail_stats_update, async onRun(_event, context) {
+      if (await context.settings.get('modmailStats')) {
+        await updateMailStats(context, 'Daily');
+      }
+    },
+  });
+  devvit.addMenuItem({
+  label: 'create debug log',
+  description: 'u/modlogstats: create the log from the log entries i stored',
+  location: 'subreddit', forUserType: 'moderator',
+  async onPress(_, context) {
+    const subredditName = context.subredditName;
+    if (subredditName === undefined) return context.ui.showToast('no subredditName name');
+
+    const timezone: string = await context.settings.get('Timezone') ?? 'UTC',
+      today = (new Datetime_global).toTimezone(timezone);
+    const promise: ModActionEntry[] = await queryQueueTimedModAction(today, context),
+      reason = `${usernameFormat(await context.reddit.getCurrentUsername())} wanted a debuglog`;
+
+    const content = `\n# the debug Log\n\n| Action | ModeratorName | Date | affectedUser |\n|:-------|--------------:|-----:|-------------:|\n` +
+      promise.sort((le, ri) => +ri.date - +le.date).map(each => `| ${each.type} | ${usernameFormat(each.moderatorUsername)}`
+        + ` | ${formatTimeURL(new Datetime_global(each.date, timezone))} | ${usernameFormat(each.affectedUsername || undefined)} |`).join('\n');
+    const wikipage = await context.reddit.updateWikiPage({ content, subredditName, page: 'debuglog-stats', reason });
+    if (wikipage !== undefined) context.ui.navigateTo(`https://old.reddit.com/r/${wikipage.subredditName}/wiki/${wikipage.name}/`);
+  },
+});
+}
+
+export const daily_mod_stats_update = 'daily-mod-stats-update';
+export const daily_mail_stats_update = 'daily-mail-stats-update';
+
+function datetime_local_toUTCString(datetime_local: Datetime_global | Date, timezone: string): string {
+  const dtg = new Datetime_global(datetime_local, timezone);
+  return `[${dtg.toString()}](https://clock.ant.ractoc.com/?t=${dtg.toISOString()}&format-custom=D%20M%20Y-m-d%20%5CTH%3Ai%3As%20%28e%29)`;
+}
+
+
+type ModBreakdown = {
+  moderatorUsername: string;
+  actions: { name: string; count: number }[];
+};
+
+function getSortedModBreakdown(
+  entries: ModActionEntry[],
+  sortedMods: string[]
+): ModBreakdown[] {
+  const breakdownMap: Record<string, Record<string, number>> = {};
+
+  for (const entry of entries) {
+    if (!entry) continue;
+    const { moderatorUsername, type } = entry;
+    if (!breakdownMap[moderatorUsername]) {
+      breakdownMap[moderatorUsername] = {};
+    }
+    breakdownMap[moderatorUsername][type] = (breakdownMap[moderatorUsername][type] || 0) + 1;
+  }
+
+  const unsortedBreakdowns: Record<string, ModBreakdown> = Object.fromEntries(
+    Object.entries(breakdownMap).map(([moderatorUsername, actions]) => [
+      moderatorUsername, {
+        moderatorUsername,
+        actions: Object.entries(actions)
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => b.count - a.count), // most to least frequent per mod
+      },
+    ])
+  );
+
+  // Sort mods by the given list
+  return sortedMods.map(mod => unsortedBreakdowns[mod])
+    .filter((x): x is ModBreakdown => x !== undefined);
+}
+
+class CounterMap<K> extends Map<K, number> {
+  increment(key: K, by: number = 1): this {
+    return this.set(key, (this.get(key) ?? 0) + (+by));
+  }
+}
+
+function percentageForamt(Le: number, Ri: number): string {
+  [Le, Ri] = [+Le, +Ri];
+  const percentage = (Le / Ri) * 100;
+  if (!Number.isFinite(percentage) || Number.isNaN(percentage))
+    return '0.00%';
+  return `${percentage.toFixed(2)}%`;
+}
+
+function toDayte(datetime?: Date | number): Date {
+  const date = new Date(datetime ?? Date.now());
+  date.setUTCHours(0, 0, 0, 0);
+  return date;
+}
+
+function numberToString(n: number) {
+  n = +n;
+  if (Object.is(n, -0)) return '-0';
+  if (n >= 0) return `+${n}`;
+  return `${n}`;
+}
+
+async function updateModStats(subredditName: string, ModActionEntries: ModActionEntry[],
+  context: Devvit.Context | JobContext, title: string, options: {
+    date: Date, reason: string, breakdownEachMod: boolean,
+    timezone: string, debuglog: boolean,
+    updateDifference: boolean,
+  }): Promise<{
+    wikipage: WikiPage,
+    contents: { content: string, breakdownEachMod_content: string, content_debuglog: string }
+  }> {
+  const updatedDate = new Date(options.date), reason = options.reason,
+    updatedDatetime_global = new Datetime_global(updatedDate, 'UTC'),
+    timezone = options.timezone;
+
+  // Count actions by moderator and action type
+  const modCounts: CounterMap<string> = new CounterMap,
+    actionCounts: CounterMap<string> = new CounterMap,
+    actionCountsNoAutoModSticky: CounterMap<string> = new CounterMap,
+    breakdownEachMod: boolean = options.breakdownEachMod,
+    lastModActionTaken: Map<string, Date> = new Map;
+
+  let totalActions = 0, automoderator_stickies = 0;
+  if (ModActionEntries.length === 0) {
+    const page: string = title;
+    let content = `# Moderator Activity Statistics\n\n*Last updated: ${datetime_local_toUTCString(updatedDatetime_global, timezone)}*`;
+    content += `  \n${waterMark(subredditName)}  \nTotal Actions counted: 0`;
+    const contents = { content, breakdownEachMod_content: '', content_debuglog: '' };
+    return { wikipage: await context.reddit.updateWikiPage({ subredditName, page, content, reason, }), contents };
+  }
+
+  let distinguish: number = 0, sticky: number = 0;
+  let approvePost: number = 0, removePost: number = 0,
+    approveComment: number = 0, removeComment: number = 0,
+    acceptmoderatorinvite: number = 0, banUser: number = 0,
+    dev_platform_app_changed: number = 0, removemoderator: number = 0;
+  const lastActionTaken: Date = ModActionEntries.map(m => m.date).sort((le: Date, ri: Date) => Number(ri) - Number(le))[0] ?? new Date;
+  for (const action of ModActionEntries) {
+    const when = action.date, modUsername = action.moderatorUsername, actionNameType = action.type;
+    totalActions++;
+
+    // Count by moderator
+    modCounts.increment(modUsername, 1);
+
+    // Count by action type
+    actionCounts.increment(actionNameType, 1);
+
+    // Count actions excluding AutoMod stickies
+    if (actionNameType === 'sticky' && modUsername === 'AutoModerator') {
+      automoderator_stickies += 1;
+    } else {
+      actionCountsNoAutoModSticky.increment(actionNameType, 1);
+    }
+
+    switch (actionNameType) {
+      case 'sticky': sticky++; break;
+      case 'banuser': banUser++; break;
+      case 'removelink': removePost++; break;
+      case 'distinguish': distinguish++; break;
+      case 'approvelink': approvePost++; break;
+      case 'removecomment': removeComment++; break;
+      case 'approvecomment': approveComment++; break;
+      case 'removemoderator': removemoderator++; break;
+      case 'acceptmoderatorinvite': acceptmoderatorinvite++; break;
+      case 'dev_platform_app_changed': dev_platform_app_changed++;
+        break; default:
+    }
+
+    const existingActionDate = lastModActionTaken.get(action.moderatorUsername);
+
+    if (!existingActionDate || when > existingActionDate) {
+      lastModActionTaken.set(action.moderatorUsername, action.date);
+    }
+  }
+
+  // Sort moderators by action count
+  const sortedMods: { name: string, count: number, percentage: string, difference: number }[] =
+    [...modCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(function ([name, count]) {
+        const percentage = percentageForamt(count, totalActions);
+        return { name, count, percentage, difference: NaN, };
+      });
+  {
+    for (const sortedMod of sortedMods) {
+      sortedMod.difference = await (async function (): Promise<number> {
+        const { count } = sortedMod, userId = (await context.reddit.getUserByUsername(sortedMod.name))?.id;
+        if (/\[Favicond_/i.test(sortedMod.name)) return 0;
+        if (userId) {
+          // await addUserIdToQueue(userId, context);
+          const jsonContent = JSON.parse((await context.redis.get(`modactionCount-${userId}`)) ?? '{"count":0,"lastUpdated":"2024-01-01"}');
+          const previousCount = jsonContent?.count ?? 0, lastUpdated = new Date(jsonContent?.lastUpdated ?? '2024-01-02'), today = toDayte();
+          // console.log(jsonEncode({
+          //   modname: sortedMod.name, canUpdate: lastUpdated < today, lastUpdated,
+          //   today, updateDifference: options.updateDifference, jsonContent, count
+          // }, 2));
+
+          if (lastUpdated < today && options.updateDifference) {
+            lastUpdated.setTime(today as unknown as number);
+            // console.log(jsonEncode({ count, lastUpdated, "updated-modname": sortedMod.name }));
+            const expiration = ResolveSecondsAfter(oneDayInseconds * 3);
+            await context.redis.set(`modactionCount-${userId}`, JSON.stringify({ count, lastUpdated }), { expiration });
+          }
+          if (isFinite(previousCount)) return count - previousCount;
+          else return NaN;
+        } return 0;
+      })();
+    }
+  }
+  // Get top 10 actions
+  const top10Actions = [...actionCounts]
+    .sort((a, b) => b[1] - a[1]).slice(0, 10)
+    .map(([name, count]) => ({ name, count }));
+
+  // Get top 10 actions without AutoMod stickies
+  const top10ActionsNoAutoModSticky = [...actionCountsNoAutoModSticky]
+    .sort((a, b) => b[1] - a[1]).slice(0, 10)
+    .map(([name, count]) => ({ name, count }));
+
+  const breakdownPerMod = getSortedModBreakdown(ModActionEntries, sortedMods.map(s => s.name));
+
+  // Generate wiki content
+  const debuglog = options.debuglog || true, {
+    content,
+    content_debuglog,
+    breakdownEachMod_content,
+    crossSiteLog,
+  } = generateWikiContent(
+    updatedDatetime_global, sortedMods, top10Actions,
+    top10ActionsNoAutoModSticky, totalActions,
+    subredditName, {
+    breakdownPerMod,
+    breakdownEachMod,
+    ModActionEntries,
+    timezone, debuglog,
+    automoderator_stickies,
+    lastModActionTaken,
+    lastActionTaken,
+    distinguish, sticky,
+    approvePost, removePost,
+    approveComment, removeComment,
+    acceptmoderatorinvite, banUser,
+    dev_platform_app_changed,
+    removemoderator,
+  });
+
+  let wikicontent = content + breakdownEachMod_content + content_debuglog;
+
+  // if(debuglog){const b64=btoa(crossSiteLog);wikicontent=
+  // wikicontent.replace(/https:\/\/ant\.ractoc\.com\/modlogstats\/#referer/,
+  // `https://ant.ractoc.com/modlogstats/?subredditName=${subredditName}#${b64}`);}
+
+  // Update the wiki page
+  const wikipage = await context.reddit.updateWikiPage({
+    content: wikicontent, subredditName, page: title, reason,
+  });
+  return { wikipage, contents: { content, content_debuglog, breakdownEachMod_content } };
+}
+
+function sumArray(self: number[]): number {
+  const sum = function (accumulator: number, currentValue: number): number {
+    return accumulator + currentValue;
+  };
+  return self.reduce(sum, 0);
+}
+
+function usernameFormat(string?: string, linked: boolean = false): string {
+  if (string === undefined) return '[Favicond_object Undefined]';
+  return /^[a-zA-Z0-9\-_]+$/.test(string) ? (linked ? `[u/${string}](https://old.reddit.com/u/${string}/)` : ('u/' + string)) : string;
+}
+
+function generateWikiContent(datetimeLocal: Datetime_global,
+  mods: { name: string; count: any; percentage: any; difference: number; }[],
+  actions: { name: any; count: any; }[],
+  actionsNoAutoMod: any, totalActions: number, subredditName: string, options: {
+    breakdownPerMod: ModBreakdown[], breakdownEachMod: boolean,
+    ModActionEntries: ModActionEntry[], timezone: string,
+    debuglog: boolean, automoderator_stickies: number,
+    lastModActionTaken: Map<string, Date>,
+    lastActionTaken: Date, banUser: number,
+    approvePost: number, removePost: number,
+    approveComment: number, removeComment: number,
+    distinguish: number, sticky: number,
+    dev_platform_app_changed: number,
+    acceptmoderatorinvite: number,
+    removemoderator: number,
+  }): { content: string; breakdownEachMod_content: string; content_debuglog: string; crossSiteLog: string; } {
+  let { timezone } = options, content = `# Moderator Activity Statistics\n\n*Last updated: ${datetime_local_toUTCString(datetimeLocal, timezone)}*`;
+  content += `  \n${waterMark(subredditName)}  \nTotal Actions counted: ${totalActions}\n\n`;
+
+  // Reminder, Favicond_
+  content += `Reminder, entries starting with 'Favicond\\_' are not found in the modlog and added by the developer.`;
+
+  // General Stats
+  content += `\n## General Statistics\n`;
+  content += `\nLatest-Action-At: <${datetime_local_toUTCString(options.lastActionTaken, timezone)}>  `;
+  content += `\nModerators removed \`${options.removeComment}\` comments and \`${options.removePost}\` posts. `;
+  content += `Moderators approved \`${options.approveComment}\` comments and \`${options.approvePost}\` posts.`;
+  content += `  \nThat is a total of \`${options.removeComment + options.approveComment}\` comments actioned on`;
+  content += ` and \`${options.approvePost + options.removePost}\` posts.  \n\`${percentageForamt(options.removeComment,
+    options.removeComment + options.approveComment)}\` of the comments actioned on were removed. \`${percentageForamt(
+      options.removePost, options.approvePost + options.removePost)}\` for posts\n\nModerators banned \`${options.banUser}`;
+  content += `\` users. distinguished \`${options.distinguish}\` posts or comments. stickied \`${options.sticky}\` of them.`;
+  content += ` \`${options.acceptmoderatorinvite}\` Moderators accepted an invite and \`${options.removemoderator}\` were`;
+  content += ` Fired. and devvit apps changed \`${options.dev_platform_app_changed}\` times.`;
+
+  // Most active moderators
+  content += `\n\n## Most Active Moderators\n\nthe difference is only calculated at the regularly scheduled update\n\n`;
+  content += `| Moderator | Actions | Percentage | difference |\n`;
+  content += `|:----------|--------:|-----------:|-----------:|\n`;
+
+  // mods.forEach(function (mod: any) { content += `| ${username(mod.name)} | \`${mod.count}\` | \`${mod.percentage}\` |\n`;});
+  content += mods.map(mod => `| ${usernameFormat(mod.name)} | ${mod.count} | ${mod.percentage} | ${numberToString(mod.difference)} |\n`).join('');
+
+  // Top 10 actions
+  content += `\n## Top 10 Most Common Actions\n\n`;
+  content += `| Action | Count |\n|:-------|------:|\n`;
+
+  content += actions.map(action => `| ${action.name} | ${action.count} |\n`).join('');
+
+  // Top 10 actions without AutoMod stickies
+  content += `\n## Top 10 Actions (excluding AutoModerator stickies)\n\nAutomoderator`;
+  content += `-stickies accounted for ${options.automoderator_stickies} actions\n\n`;
+  content += `| Action | Count |\n|:-------|------:|\n`;
+
+  actionsNoAutoMod.forEach((action: any) => {
+    content += `| ${action.name} | ${action.count} |\n`;
+  });
+  let breakdownEachMod_content = '';
+  if (options.breakdownEachMod) {
+    breakdownEachMod_content += `\n## Breakdown Per Mod\n`;
+    options.breakdownPerMod.forEach(function (each: ModBreakdown) {
+      breakdownEachMod_content += `\n### Breakdown For ${usernameFormat(each.moderatorUsername)}\n`;
+      breakdownEachMod_content += `\nMost-Recent-Action: ${formatTimeURL(new Datetime_global(options.lastModActionTaken.get(each.moderatorUsername)!, timezone))}  \n`;
+      breakdownEachMod_content += `Total-Actions: ${sumArray(each.actions.map(a => a.count))}\n\n`;
+      breakdownEachMod_content += `| Action | Count |\n`;
+      breakdownEachMod_content += `|:-------|------:|\n`;
+      each.actions.forEach(function (each_) {
+        breakdownEachMod_content += `| ${each_.name} | ${each_.count} |\n`;
+      });
+    });
+  }
+
+  let content_debuglog = '', crossSiteLog: [string, string, string][] | string = [];
+  if (options.debuglog) {
+    content_debuglog += '## the debug Log\n\nIs Temporaily Disabled Globally';
+    // content_debuglog += `\n## the debug Log\n\n| Action | ModeratorName | Date |\n|:-------|--------------:|-----:|\n`;
+    // options.ModActionEntries.forEach(function (each: ModActionEntry) {// ago (${Datetime_global(each.date, timezone)})
+    //   content_debuglog += `| ${each.type} | ${usernameFormat(each.moderatorUsername)} | ${Datetime_global(each.date, timezone)} |\n`;
+    //   (crossSiteLog as [string, string, string][]).push([each.type, each.moderatorUsername, each.date.toISOString()]);
+    // });
+  }
+  crossSiteLog = crossSiteLog.join(';');
+  return { content, breakdownEachMod_content, content_debuglog, crossSiteLog };
+}
+
+// Devvit.addMenuItem({
+//   label: 'create debug log (json)',
+//   description: 'u/modlogstats: create the log from the log entries i stored',
+//   location: 'subreddit', forUserType: 'moderator',
+//   async onPress(_, context) {
+//     const subredditName = context.subredditName;
+//     if (subredditName === undefined) return context.ui.showToast('no subredditName name');
+//     // const timezone: string = await context.settings.get('Timezone') ?? 'UTC',
+//     //   today = (new Datetime_global).toTimezone(timezone);
+//     // const promise: ModActionEntry[] = await queryQueueTimedModAction(today, context),
+//     const reason = `${usernameFormat(await context.reddit.getCurrentUsername())} wanted a debuglog`;
+//     // const content = jsonEncodeIndent(promise.sort((le, ri) => +ri.date - +le.date), false);
+//     const content = jsonEncodeIndent(await context.reddit.getModerationLog({ subredditName }).all(), false);
+//     await context.reddit.updateWikiPage({ content, subredditName, page: 'debuglog-stats', reason });
+//     // if (wikipage !== undefined) context.ui.navigateTo(`https://old.reddit.com/r/${wikipage.subredditName}/wiki/${wikipage.name}/`);
+//     context.ui.showToast('Done!');
+//   },
+// });
+
+// type sortedMailers = { name: string, count: number, percentage: string };
+
+async function updateMailStats(context: JobContext, forced: 'Daily' | 'Forced') {
+  const subredditName = context.subredditName;
+  if (subredditName === undefined) return;
+  const timezone: string = await context.settings.get('Timezone') ?? 'UTC',
+    today = (new Datetime_global).toTimezone(timezone), { redis } = context;
+  const promise: incommingModMailEntry[] = await (async function (): Promise<incommingModMailEntry[]> {
+    const promise: incommingModMailEntry[] = [], utc = 'UTC';
+    let items, time = (new Datetime_global(today, utc)), letout = 0;
+    //time = addtoTime(time, 0, 0, 0, 0, +1);
+    while (items = await redis.hGetAll('modlog:' + time.format('Y-m-d'))) {
+      time = addtoTime(time, 0, 0, 0, 0, -1);
+      for (const entry of Object.values(items)) {
+        const parsed = JSON.parse(entry as string);
+        parsed['date'] = new Date(parsed['date']);
+        if (parsed.mailerUsername === undefined) continue;
+        promise.push(parsed as incommingModMailEntry);
+      }
+      if ((++letout) > 90) break;
+    }
+    return promise;
+  })();
+  let totalActions = 0;
+  const mostMailer = new CounterMap<string>, adminMod = new Map<string, { isAdmin: boolean, isMod: boolean }>();
+  for (const element of promise) {
+    mostMailer.increment(element.mailerUsername);
+    totalActions++;
+    let { isAdmin, isMod } = Object(adminMod.get(element.mailerUsername));
+    isAdmin = Boolean(element.isAdmin) || isAdmin;
+    isMod = Boolean(element.isMod) || isMod;
+    adminMod.set(element.mailerUsername, { isAdmin, isMod });
+  }
+  // const sortedMailers: sortedMailers[] = [...mostMailer.entries()]
+  //   .sort((a, b) => b[1] - a[1])
+  //   .map(([name, count]) => ({
+  //     name, count, percentage: percentageForamt(count, totalActions),
+  //   }));
+  let content = `# Moderator Mail Activity Statistics\n\n*Last updated: ${datetime_local_toUTCString(today, timezone)}*  \n`;
+  content += `${waterMark(subredditName)}  \nTotal modmails counted: ${totalActions}\n\n\`[A]\` = reddit identified this as Admin`;
+  content += `; \`[M]\` = reddit identified this as Mod; \`[U]\` = any other user; \`[S]\` = a subreddit;\n\n`;
+  // content += `| mailer | count | percentage | moderationStatus |\n`;
+  // content += `|:-------|------:|-----------:|-----------------:|\n`;
+  // sortedMailers.forEach(function (sortedMailer: sortedMailers) {
+  //   let { isAdmin, isMod } = Object(adminMod.get(sortedMailer.name));
+  //   const moderationStatus = (isAdmin ? '[A]' : (isMod ? '[M]' : '[U]'));//.replace(/\[/, '\\[').replace(/]/, '\\]');
+  //content += `| ${usernameFormat(sortedMailer.name)} | ${sortedMailer.count} | ${sortedMailer.percentage} | \`${moderationStatus}\` |\n`;});
+  const page = 'modmail-stats', reason = `${forced} update of the modmail-stats (${today})`;
+
+  content += 'note: this area is work in progress, have a log for now.';
+
+  content += '\n\n| mailer | moderator username | moderationStatus | Date |\n|:-------|-------------------:|-----------------:|-----:|\n' + promise.map(
+    m => `| ${m.mailerUsername} | ${m.moderatorUsername} | ${(m.isAdmin ? '[A]' : (m.isMod ? '[M]' : '[U]'))} | ${formatTimeURL(m.date)} |`).join('\n');
+  return await context.reddit.updateWikiPage({ content, subredditName, page, reason });
+}

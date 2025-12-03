@@ -2,6 +2,45 @@
 
 the versions before the current minor version are moved here
 
+### 0.4.9: attempt at fix failed.
+
+### 0.4.6: fixed hope and dreams in differences; 0.4.7: updated readme
+
+- thats pretty much it
+
+#### 0.4.8: we lost our x.
+
+- internally: changed tsx to ts.
+
+### 0.4.4: `olderVersions.md`
+
+- the versions before the current minor version are moved to `olderVersions.md` on github.
+- internal use only, check back next update.
+- [olderVersions.md](https://github.com/DNSCond/modlogstats/blob/main/olderVersions.md)
+
+#### 0.4.5: 'Update Mod Stats and difference'
+
+- added 'Update Mod Stats and difference'
+- will be gone next update.
+
+### 0.4.3: clean account queue
+
+- removed 'clean account queue' left overs from a dev version
+
+### 0.4.2: updateDifference
+
+- solved the bug where updates didnt happen
+
+### 0.4.1: new Datetime_global(today_.setUTCDate(today_.getUTCDate() - 1), 'UTC')
+
+- resolves ["if your modlogstats appears empty, please do not update yet "](https://www.reddit.com/user/antboiy/comments/1mqihz8/)
+
+### 0.4.0: difference
+
+- updated to devvit 0.12.0
+- added the `difference` value
+- other internal changes that are probably not important for users.
+
 # 0.3.x
 
 ### 0.3.16: debug its own (0.3.17: updated reamde)
