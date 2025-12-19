@@ -1,0 +1,10 @@
+{
+  "$schema": "https://developers.reddit.com/schema/config-file.v1.json",
+  "name": "modlogstats",
+  "marketingAssets": {
+    "icon": "assets/modlog-stats-icon.png"
+  },
+  "blocks": {
+    "entry": "src/main.ts"
+  }
+}

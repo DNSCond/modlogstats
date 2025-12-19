@@ -87,13 +87,9 @@ on GitHub.
 
 ## changelog
 
-### 0.5.0
+### 0.4.15
 
-- moved the version numbers before 0.4.10 to the [older versions](https://github.com/DNSCond/modlogstats/blob/main/olderVersions.md) page.
-- a new data schema is out. for those diving into the code, v2 is the schema that is being used now,
-  `v1.ts` contains the code related to the old schema. for users, the only thing that changed is the descriptiveness of the logs.
-- splitted up the stats pages.
-
+- updated icon
 
 ### 0.4.12
 
