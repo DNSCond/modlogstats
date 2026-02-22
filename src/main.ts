@@ -1,5 +1,5 @@
 // Visit developers.reddit.com/docs to learn Devvit!
-import { Devvit,type TriggerContext,  } from '@devvit/public-api';
+import { Devvit, type TriggerContext, } from '@devvit/public-api';
 import { Datetime_global } from 'datetime_global/Datetime_global.ts';
 import { v4 as uuidv4 } from 'uuid';
 import { Expire, scheduleJob } from './helpers.ts';
@@ -10,6 +10,7 @@ import {
 } from './types.ts';
 import { daily_mail_stats_update, daily_mod_stats_update, applyTodevvitSingleton } from './v1.ts';
 import { applyTeleportersToDevvitSingleton } from './aplyTeleporters.ts';
+import { Temporal } from 'temporal-polyfill';
 
 Devvit.configure({ redditAPI: true, redis: true, });
 
@@ -55,7 +56,8 @@ Devvit.addSettings([
     helpText: 'specify 1 iana timezone, some examples (Europe/Berlin, Asia/Tokyo, America/New_York)',
     onValidate({ value }) {
       try {
-        new Datetime_global(Date.now(), value);
+        // @ts-expect-error
+        new Temporal.ZonedDateTime(BigInt(Date.now()) * 1_000_000n, value);
       } catch (e) {
         return String(e);
       }

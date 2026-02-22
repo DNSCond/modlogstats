@@ -78,7 +78,7 @@ async function updateFromQueue(context: JobContext | Devvit.Context, $Daily: str
   }
 }
 
-export function applyTodevvitSingleton(devvit: typeof Devvit) {
+export function applyTodevvitSingleton(devvit: typeof Devvit) {return;
   // Add a menu item to manually trigger the update
   devvit.addMenuItem({
     label: 'Update Mod Stats Now',
