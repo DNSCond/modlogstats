@@ -62,7 +62,7 @@ async function updateFromQueue(context: JobContext | Devvit.Context, $Daily: str
     await queryQueueModAction(today, context),
     context, 'modlog-stats', {
     date: new Date(tomorrow), breakdownEachMod, debuglog, timezone,
-    reason: `${$Daily} update at ${datetime_local_toUTCString(tomorrow, 'UTC')}`,
+    reason: `${$Daily} update at ${datetime_local_toUTCString(tomorrow, 'UTC', false)}`,
     updateDifference,
   });
 
@@ -78,7 +78,7 @@ async function updateFromQueue(context: JobContext | Devvit.Context, $Daily: str
   }
 }
 
-export function applyTodevvitSingleton(devvit: typeof Devvit) {return;
+export function applyTodevvitSingleton(devvit: typeof Devvit) {
   // Add a menu item to manually trigger the update
   devvit.addMenuItem({
     label: 'Update Mod Stats Now',
@@ -99,7 +99,7 @@ export function applyTodevvitSingleton(devvit: typeof Devvit) {return;
           return { type, moderatorUsername, date: new Date(event.createdAt) };
         }), context, 'modlog-stats', {
           date: now, breakdownEachMod, timezone, debuglog,
-          reason: `manual update at ${datetime_local_toUTCString(now, 'UTC')}`,
+          reason: `manual update at ${datetime_local_toUTCString(now, 'UTC', false)}`,
           updateDifference: false,
         });
         const wikipage = page.wikipage;
@@ -143,7 +143,7 @@ export function applyTodevvitSingleton(devvit: typeof Devvit) {return;
         await queryQueueTimedModAction(today, context),
         context, 'modlog-stats', {
         date: today.toDate(), breakdownEachMod, timezone, debuglog,
-        reason: `allTime update at ${datetime_local_toUTCString(today, 'UTC')}`,
+        reason: `allTime update at ${datetime_local_toUTCString(today, 'UTC', false)}`,
         updateDifference: false,
       });
       context.ui.showToast('Mod stats updated successfully!');
@@ -226,32 +226,32 @@ export function applyTodevvitSingleton(devvit: typeof Devvit) {return;
     },
   });
   devvit.addMenuItem({
-  label: 'create debug log',
-  description: 'u/modlogstats: create the log from the log entries i stored',
-  location: 'subreddit', forUserType: 'moderator',
-  async onPress(_, context) {
-    const subredditName = context.subredditName;
-    if (subredditName === undefined) return context.ui.showToast('no subredditName name');
+    label: 'create debug log',
+    description: 'u/modlogstats: create the log from the log entries i stored',
+    location: 'subreddit', forUserType: 'moderator',
+    async onPress(_, context) {
+      const subredditName = context.subredditName;
+      if (subredditName === undefined) return context.ui.showToast('no subredditName name');
 
-    const timezone: string = await context.settings.get('Timezone') ?? 'UTC',
-      today = (new Datetime_global).toTimezone(timezone);
-    const promise: ModActionEntry[] = await queryQueueTimedModAction(today, context),
-      reason = `${usernameFormat(await context.reddit.getCurrentUsername())} wanted a debuglog`;
+      const timezone: string = await context.settings.get('Timezone') ?? 'UTC',
+        today = (new Datetime_global).toTimezone(timezone);
+      const promise: ModActionEntry[] = await queryQueueTimedModAction(today, context),
+        reason = `${usernameFormat(await context.reddit.getCurrentUsername())} wanted a debuglog`;
 
-    const content = `\n# the debug Log\n\n| Action | ModeratorName | Date | affectedUser |\n|:-------|--------------:|-----:|-------------:|\n` +
-      promise.sort((le, ri) => +ri.date - +le.date).map(each => `| ${each.type} | ${usernameFormat(each.moderatorUsername)}`
-        + ` | ${formatTimeURL(new Datetime_global(each.date, timezone))} | ${usernameFormat(each.affectedUsername || undefined)} |`).join('\n');
-    const wikipage = await context.reddit.updateWikiPage({ content, subredditName, page: 'debuglog-stats', reason });
-    if (wikipage !== undefined) context.ui.navigateTo(`https://old.reddit.com/r/${wikipage.subredditName}/wiki/${wikipage.name}/`);
-  },
-});
+      const content = `\n# the debug Log\n\n| Action | ModeratorName | Date | affectedUser |\n|:-------|--------------:|-----:|-------------:|\n` +
+        promise.sort((le, ri) => +ri.date - +le.date).map(each => `| ${each.type} | ${usernameFormat(each.moderatorUsername)}`
+          + ` | ${formatTimeURL(new Datetime_global(each.date, timezone))} | ${usernameFormat(each.affectedUsername || undefined)} |`).join('\n');
+      const wikipage = await context.reddit.updateWikiPage({ content, subredditName, page: 'debuglog-stats', reason });
+      if (wikipage !== undefined) context.ui.navigateTo(`https://old.reddit.com/r/${wikipage.subredditName}/wiki/${wikipage.name}/`);
+    },
+  });
 }
 
 export const daily_mod_stats_update = 'daily-mod-stats-update';
 export const daily_mail_stats_update = 'daily-mail-stats-update';
 
-function datetime_local_toUTCString(datetime_local: Datetime_global | Date, timezone: string): string {
-  const dtg = new Datetime_global(datetime_local, timezone);
+function datetime_local_toUTCString(datetime_local: Datetime_global | Date, timezone: string, linkify: boolean = true): string {
+  const dtg = new Datetime_global(datetime_local, timezone); if (!linkify) return dtg.toString();
   return `[${dtg.toString()}](https://clock.ant.ractoc.com/?t=${dtg.toISOString()}&format-custom=D%20M%20Y-m-d%20%5CTH%3Ai%3As%20%28e%29)`;
 }
 
